@@ -1,51 +1,277 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.8.7;
 
-// TODO: fix erc20_mint, since StateManipulations and TestUtils both have hevm
-
-import { IERC20 } from "../../modules/erc20/src/interfaces/IERC20.sol";
-
 import { TestUtils, StateManipulations } from "../../modules/contract-test-utils/contracts/test.sol";
-import { LoanUser }                      from "../../modules/loan/contracts/test/accounts/LoanUser.sol";
+import { IERC20 }                        from "../../modules/erc20/src/interfaces/IERC20.sol";
 
-// TODO: init all existing contracts as globals in setUp, wrapped with IContractLike from interfaces directory
+import { IMapleLoan }             from "../../modules/loan/contracts/interfaces/IMapleLoan.sol";
+import { MapleLoan }              from "../../modules/loan/contracts/MapleLoan.sol";
+import { MapleLoanFactory }       from "../../modules/loan/contracts/MapleLoanFactory.sol";
+import { MapleLoanInitializer }   from "../../modules/loan/contracts/MapleLoanInitializer.sol";
+import { Borrower as BorrowerV2 } from "../../modules/loan/contracts/test/accounts/Borrower.sol";
+import { LoanUser }               from "../../modules/loan/contracts/test/accounts/LoanUser.sol";
 
-// Governor                0xd6d4Bcde6c816F17889f1Dd3000aF0261B03a196
-// GlobalAdmin             0x93CC3E39C91cf93fd57acA416ed6fE66e8bdD573
-// SecurityAdmin           0x6b1A78C1943b03086F7Ee53360f9b0672bD60818
-// USDC                    0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
-// WBTC                    0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599
-// WETH9                   0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
-// MapleToken              0x33349B282065b0284d756F0577FB39c158F935e6
-// UniswapV2Router02       0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
-// BFactory                0x9424B1412450D0f8Fc2255FAf6046b98213B76Bd
-// ChainLinkAggregatorWBTC 0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c
-// BPool                   0xc1b10e536CD611aCFf7a7c32A9E29cE6A02Ef6ef
-// MapleGlobals            0xC234c62c8C09687DFf0d9047e40042cd166F3600
-// Util                    0x95f9676A34aF2675B63948dDba8F8c798741A52a
-// PoolLib                 0x2c1C30fb8cC313Ef3cfd2E2bBf2da88AdD902C30
-// LoanLib                 0x51A189ccD2eB5e1168DdcA7e59F7c8f39AA52232
-// MapleTreasury           0xa9466EaBd096449d650D5AEB0dD3dA6F52FD0B19
-// RepaymentCalc           0x7d622bB6Ed13a599ec96366Fa95f2452c64ce602
-// LateFeeCalc             0x8dC5aa328142aa8a008c25F66a77eaA8E4B46f3c
-// PremiumCalc             0xe88Ab4Cf1Ec06840d16feD69c964aD9DAFf5c6c2
-// PoolFactory             0x2Cd79F7f8b38B9c0D80EA6B230441841A31537eC
-// StakeLockerFactory      0x53a597A4730Eb02095dD798B203Dcc306348B8d6
-// LiquidityLockerFactory  0x966528BB1C44f96b3AA8Fbf411ee896116b068C9
-// DebtLockerFactory       0x2a7705594899Db6c3924A872676E54f041d1f9D8
-// LoanFactory             0x908cC851Bc757248514E060aD8Bd0a03908308ee
-// CollateralLockerFactory 0xEE3e59D381968f4F9C92460D9d5Cfcf5d3A67987
-// FundingLockerFactory    0x0eB96A53EC793a244876b018073f33B23000F25b
-// MplRewardsFactory       0x0155729EbCd47Cb1fBa02bF5a8DA20FaF3860535
-// PriceOracleAAVE         0xCc903496EDEE42F1A298C63905c19a42AF708b15
-// PriceOracleLINK         0x5ad18e4ce9c88c3c266a1befe924cd6eaf812f24
-// PriceOracleUSDC         0x5DC5E14be1280E747cD036c089C96744EBF064E7
-// PriceOracleWBTC         0xF808ec05c1760DE4794813d08d2Bf1E16e7ECD0B
+import { AddressRegistry } from "../AddressRegistry.sol";
 
-contract ParityTest is TestUtils, StateManipulations {
+interface ILoanV1Like {}
 
+interface IPoolLike {
+
+    function fundLoan(address loan, address debtLockerFactory, uint256 amount) external;
+
+    function principalOut() external view returns (uint256);
+
+}
+
+interface ILoanFactoryV1Like {
+
+    function createLoan(
+        address liquidityAsset,
+        address collateralAsset,
+        address flFactory,
+        address clFactory,
+        uint256[5] memory specs,
+        address[3] memory calcs
+    ) external returns (address);
+
+}
+
+interface IMapleGlobalsLike {
+    function governor() external view returns (address);
+    function setValidLoanFactory(address loanFactory, bool valid) external;
+}
+
+contract Borrower is BorrowerV2 {
+
+    // Create V1 Loan
+    function loanFactory_createLoan(
+        address loanFactory,
+        address liquidityAsset,
+        address collateralAsset,
+        address flFactory,
+        address clFactory,
+        uint256[5] memory specs,
+        address[3] memory calcs
+    ) 
+        external returns (address)
+    {
+        return ILoanFactoryV1Like(loanFactory).createLoan(liquidityAsset, collateralAsset, flFactory, clFactory, specs, calcs); 
+    }
+
+}
+
+contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
+
+    uint256 constant WAD = 10 ** 18;
+    uint256 constant BTC = 10 ** 8;   // WBTC precision
+    uint256 constant USD = 10 ** 6;   // USDC precision
+
+    uint256 start;
+
+    Borrower borrower;
+
+    MapleLoan            loanImplementation;
+    MapleLoanFactory     loanFactory;
+    MapleLoanInitializer loanInitializer;
+
+    ILoanV1Like loanV1;
+    IMapleLoan  loanV2;
+
+    IMapleGlobalsLike globals = IMapleGlobalsLike(MAPLE_GLOBALS);
+    IPoolLike         pool    = IPoolLike(ORTHOGONAL_POOL);        // Using deployed Orthogonal Pool
+
+    IERC20 usdc = IERC20(USDC);
+    IERC20 wbtc = IERC20(WBTC);
+    
     function setUp() external {
+        /*******************************/
+        /*** Set up actors and state ***/
+        /*******************************/
 
+        start = block.timestamp;
+
+        // Set existing Orthogonal PD as Governor
+        hevm.store(MAPLE_GLOBALS, bytes32(uint256(1)), bytes32(uint256(uint160(address(this)))));
+
+        borrower = new Borrower();
+
+        /****************************************/
+        /*** Deploy LoanV1 to compare against ***/
+        /****************************************/
+
+        uint256[5] memory specs = [1_200, 90, 30, uint256(1_000_000 * USD), 10];
+        address[3] memory calcs = [REPAYMENT_CALC, LATEFEE_CALC, PREMIUM_CALC];
+
+        loanV1 = ILoanV1Like(borrower.loanFactory_createLoan(LOAN_FACTORY, USDC, WBTC, FL_FACTORY, CL_FACTORY, specs, calcs));
+
+        /*************************************************************/
+        /*** Deploy and set up new LoanFactory with implementation ***/
+        /*************************************************************/
+        
+        // Deploy new LoanFactory, implementation, and initializer
+        loanFactory        = new MapleLoanFactory(MAPLE_GLOBALS);     
+        loanImplementation = new MapleLoan();
+        loanInitializer    = new MapleLoanInitializer();
+        
+        // Register the new implementations and set default version
+        loanFactory.registerImplementation(1, address(loanImplementation), address(loanInitializer));
+        loanFactory.setDefaultVersion(1);
+
+        globals.setValidLoanFactory(address(loanFactory), true);  // Whitelist new LoanFactory
+
+        /*********************/
+        /*** Deploy LoanV2 ***/
+        /*********************/
+
+        address[2] memory assets = [WBTC, USDC];
+
+        uint256[6] memory parameters = [
+            uint256(1_000_000 * USD),  // $100m loan (interest only)
+            uint256(10 days),            // 10 day grace period
+            uint256(1_200 * 100),        // 12% interest
+            uint256(1_000 * 100),        // 10% late fee
+            uint256(30 days),            // 30 day payment interval
+            uint256(3)                   // 3 payments (90 day term)
+        ];
+
+        uint256[2] memory requests = [uint256(250 * BTC), uint256(1_000_000 * USD)];  // 250 BTC @ $40k = $10m = 10% collateralized
+
+        bytes memory arguments = loanInitializer.encodeArguments(address(borrower), assets, parameters, requests);
+
+        loanV2 = IMapleLoan(borrower.mapleLoanFactory_createLoan(address(loanFactory), arguments));
+    }
+
+    function test_endToEndLoan() external {
+        /*****************/
+        /*** Fund Loan ***/
+        /*****************/
+
+        assertEq(pool.principalOut(),             98_300_000_000000);
+        assertEq(usdc.balanceOf(ORTHOGONAL_LL),   3_508_684_976740);
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
+
+        pool.fundLoan(address(loanV2), DL_FACTORY, 1_000_000 * USD);
+
+        assertEq(pool.principalOut(),             99_300_000_000000);
+        assertEq(usdc.balanceOf(ORTHOGONAL_LL),   2_508_684_976740);
+        assertEq(usdc.balanceOf(address(loanV2)), 1_000_000_000000);
+
+        /*********************/
+        /*** Drawdown Loan ***/
+        /*********************/
+
+        erc20_mint(WBTC, 0, address(borrower), 250 * BTC);
+
+        assertEq(loanV2.drawableFunds(),            1_000_000 * USD);
+        assertEq(usdc.balanceOf(address(loanV2)),   1_000_000 * USD);
+        assertEq(usdc.balanceOf(address(borrower)), 0);
+        assertEq(wbtc.balanceOf(address(borrower)), 250 * BTC);
+        assertEq(wbtc.balanceOf(address(loanV2)),   0);
+        assertEq(loanV2.collateral(),               0);
+
+        borrower.erc20_transfer(WBTC, address(loanV2), 250 * BTC);
+        borrower.loan_postCollateral(address(loanV2));
+        borrower.loan_drawdownFunds(address(loanV2), 1_000_000 * USD, address(borrower));
+
+        assertEq(loanV2.drawableFunds(),            0);
+        assertEq(usdc.balanceOf(address(loanV2)),   0);
+        assertEq(usdc.balanceOf(address(borrower)), 1_000_000 * USD);
+        assertEq(wbtc.balanceOf(address(borrower)), 0);
+        assertEq(wbtc.balanceOf(address(loanV2)),   250 * BTC);
+        assertEq(loanV2.collateral(),               250 * BTC);
+
+        /********************************/
+        /*** Make Payment 1 (On time) ***/
+        /********************************/
+
+        hevm.warp(loanV2.nextPaymentDueDate());
+
+        // Check details for upcoming payment #1
+        ( uint256 principalPortion, uint256 interestPortion, uint256 lateFeesPortion ) = loanV2.getNextPaymentsBreakDown(1);
+
+        assertEq(principalPortion, 0);
+        assertEq(interestPortion,  9863 * USD);
+        assertEq(lateFeesPortion,  0);
+
+        // Make first payment
+        erc20_mint(USDC, 9, address(borrower), interestPortion);
+        
+        assertEq(loanV2.drawableFunds(),      0);
+        assertEq(loanV2.claimableFunds(),     0);
+        assertEq(loanV2.nextPaymentDueDate(), block.timestamp);  // Warped to due date
+        assertEq(loanV2.principal(),          1_000_000 * USD);
+        assertEq(loanV2.paymentsRemaining(),  3);
+
+        borrower.erc20_transfer(USDC, address(loanV2), interestPortion);
+        borrower.loan_makePayment(address(loanV2));
+
+        assertEq(loanV2.drawableFunds(),      0);
+        assertEq(loanV2.claimableFunds(),     9863 * USD);
+        assertEq(loanV2.nextPaymentDueDate(), block.timestamp + loanV2.paymentInterval());
+        assertEq(loanV2.principal(),          1_000_000 * USD);
+        assertEq(loanV2.paymentsRemaining(),  2);
+
+        /*****************************/
+        /*** Make Payment 2 (Late) ***/
+        /*****************************/
+
+        hevm.warp(loanV2.nextPaymentDueDate() + 1 days);  // 1 day late
+
+        // Check details for upcoming payment #2
+        ( principalPortion, interestPortion, lateFeesPortion ) = loanV2.getNextPaymentsBreakDown(1);
+
+        assertEq(principalPortion, 0);
+        assertEq(interestPortion,  10_191 * USD);
+        assertEq(lateFeesPortion,  2_692599);
+
+        // Make second payment
+        erc20_mint(USDC, 9, address(borrower), interestPortion + lateFeesPortion);
+        
+        assertEq(loanV2.drawableFunds(),      0);
+        assertEq(loanV2.claimableFunds(),     9863 * USD);
+        assertEq(loanV2.nextPaymentDueDate(), block.timestamp - 1 days);  // 1 day late
+        assertEq(loanV2.principal(),          1_000_000 * USD);
+        assertEq(loanV2.paymentsRemaining(),  2);
+
+        borrower.erc20_transfer(USDC, address(loanV2), interestPortion + lateFeesPortion);
+        borrower.loan_makePayment(address(loanV2));
+
+        assertEq(loanV2.drawableFunds(),      0);
+        assertEq(loanV2.claimableFunds(),     20_056_692599);
+        assertEq(loanV2.nextPaymentDueDate(), block.timestamp + loanV2.paymentInterval() - 1 days);   // 29 days from current timestamp
+        assertEq(loanV2.principal(),          1_000_000 * USD);
+        assertEq(loanV2.paymentsRemaining(),  1);
+
+        /******************************/
+        /*** Make Payment 3 (Final) ***/
+        /******************************/
+
+        hevm.warp(loanV2.nextPaymentDueDate());  // 1 day late
+
+        // Check details for upcoming payment #2
+        ( principalPortion, interestPortion, lateFeesPortion ) = loanV2.getNextPaymentsBreakDown(1);
+
+        assertEq(principalPortion, 1_000_000 * USD);
+        assertEq(interestPortion,  9863 * USD);
+        assertEq(lateFeesPortion,  0);
+
+        // Make second payment
+        erc20_mint(USDC, 9, address(borrower), 1_009_863 * USD);
+        
+        assertEq(loanV2.drawableFunds(),      0);
+        assertEq(loanV2.claimableFunds(),     20_056_692599);
+        assertEq(loanV2.nextPaymentDueDate(), block.timestamp);  // On time
+        assertEq(loanV2.principal(),          1_000_000 * USD);
+        assertEq(loanV2.paymentsRemaining(),  1);
+
+        borrower.erc20_transfer(USDC, address(loanV2), 1_009_863 * USD);
+        borrower.loan_makePayment(address(loanV2));
+
+        assertEq(loanV2.drawableFunds(),      0);
+        assertEq(loanV2.claimableFunds(),     1_029_919_692599);
+        assertEq(loanV2.nextPaymentDueDate(), block.timestamp + loanV2.paymentInterval()); 
+        assertEq(loanV2.principal(),          0);
+        assertEq(loanV2.paymentsRemaining(),  0);
     }
 
 }
