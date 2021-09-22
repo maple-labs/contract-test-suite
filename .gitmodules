@@ -1,0 +1,15 @@
+[submodule "cache/dapp-cache"]
+	path = cache/dapp-cache
+	url = git@github.com:maple-labs/maple-cache
+[submodule "modules/loan"]
+	path = modules/loan
+	url = https://github.com/maple-labs/loan.git
+[submodule "modules/contract-test-utils"]
+	path = modules/contract-test-utils
+	url = https://github.com/maple-labs/contract-test-utils.git
+[submodule "modules/debt-locker"]
+	path = modules/debt-locker
+	url = https://github.com/maple-labs/debt-locker.git
+[submodule "modules/erc20"]
+	path = modules/erc20
+	url = https://github.com/maple-labs/erc20.git

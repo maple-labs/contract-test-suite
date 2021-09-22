@@ -1,0 +1,30 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "modules/debt-locker/contracts/DebtLockerFactory.sol": {
+      "urls": ["modules/debt-locker/contracts/DebtLockerFactory.sol"]
+    },
+    "modules/loan/contracts/MapleLoanFactory.sol": {
+      "urls": ["modules/loan/contracts/MapleLoanFactory.sol"]
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": true,
+      "runs": 200
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.bytecode",
+          "evm.deployedBytecode"
+        ],
+        "": ["ast"]
+      }
+    },
+    "metadata": {
+      "bytecodeHash": "none"
+    }
+  }
+}
