@@ -1,64 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.8.7;
 
-import { TestUtils, StateManipulations } from "../../modules/contract-test-utils/contracts/test.sol";
-import { IERC20 }                        from "../../modules/erc20/src/interfaces/IERC20.sol";
+import { IERC20 } from "../../modules/erc20/src/interfaces/IERC20.sol";
 
-import { IMapleLoan }             from "../../modules/loan/contracts/interfaces/IMapleLoan.sol";
-import { MapleLoan }              from "../../modules/loan/contracts/MapleLoan.sol";
-import { MapleLoanFactory }       from "../../modules/loan/contracts/MapleLoanFactory.sol";
-import { MapleLoanInitializer }   from "../../modules/loan/contracts/MapleLoanInitializer.sol";
-import { Borrower as BorrowerV2 } from "../../modules/loan/contracts/test/accounts/Borrower.sol";
-import { LoanUser }               from "../../modules/loan/contracts/test/accounts/LoanUser.sol";
+import { TestUtils, StateManipulations } from "../../modules/contract-test-utils/contracts/test.sol";
+
+import { IMapleLoan } from "../../modules/loan/contracts/interfaces/IMapleLoan.sol";
+
+import { MapleLoan }            from "../../modules/loan/contracts/MapleLoan.sol";
+import { MapleLoanFactory }     from "../../modules/loan/contracts/MapleLoanFactory.sol";
+import { MapleLoanInitializer } from "../../modules/loan/contracts/MapleLoanInitializer.sol";
+
+import {
+    IPoolLike,
+    IMapleGlobalsLike,
+    ILoanV1Like
+} from "./interfaces/Interfaces.sol";
+
+import { Borrower } from "./accounts/Borrower.sol";
+import { Lender }   from "./accounts/Lender.sol";
 
 import { AddressRegistry } from "../AddressRegistry.sol";
-
-interface ILoanV1Like {}
-
-interface IPoolLike {
-
-    function fundLoan(address loan, address debtLockerFactory, uint256 amount) external;
-
-    function principalOut() external view returns (uint256);
-
-}
-
-interface ILoanFactoryV1Like {
-
-    function createLoan(
-        address liquidityAsset,
-        address collateralAsset,
-        address flFactory,
-        address clFactory,
-        uint256[5] memory specs,
-        address[3] memory calcs
-    ) external returns (address);
-
-}
-
-interface IMapleGlobalsLike {
-    function governor() external view returns (address);
-    function setValidLoanFactory(address loanFactory, bool valid) external;
-}
-
-contract Borrower is BorrowerV2 {
-
-    // Create V1 Loan
-    function loanFactory_createLoan(
-        address loanFactory,
-        address liquidityAsset,
-        address collateralAsset,
-        address flFactory,
-        address clFactory,
-        uint256[5] memory specs,
-        address[3] memory calcs
-    ) 
-        external returns (address)
-    {
-        return ILoanFactoryV1Like(loanFactory).createLoan(liquidityAsset, collateralAsset, flFactory, clFactory, specs, calcs); 
-    }
-
-}
 
 contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
@@ -82,7 +44,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
     IERC20 usdc = IERC20(USDC);
     IERC20 wbtc = IERC20(WBTC);
-    
+
     function setUp() external {
         /*******************************/
         /*** Set up actors and state ***/
@@ -107,12 +69,12 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         /*************************************************************/
         /*** Deploy and set up new LoanFactory with implementation ***/
         /*************************************************************/
-        
+
         // Deploy new LoanFactory, implementation, and initializer
-        loanFactory        = new MapleLoanFactory(MAPLE_GLOBALS);     
+        loanFactory        = new MapleLoanFactory(MAPLE_GLOBALS);
         loanImplementation = new MapleLoan();
         loanInitializer    = new MapleLoanInitializer();
-        
+
         // Register the new implementations and set default version
         loanFactory.registerImplementation(1, address(loanImplementation), address(loanInitializer));
         loanFactory.setDefaultVersion(1);
@@ -195,7 +157,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
         // Make first payment
         erc20_mint(USDC, 9, address(borrower), interestPortion);
-        
+
         assertEq(loanV2.drawableFunds(),      0);
         assertEq(loanV2.claimableFunds(),     0);
         assertEq(loanV2.nextPaymentDueDate(), block.timestamp);  // Warped to due date
@@ -226,7 +188,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
         // Make second payment
         erc20_mint(USDC, 9, address(borrower), interestPortion + lateFeesPortion);
-        
+
         assertEq(loanV2.drawableFunds(),      0);
         assertEq(loanV2.claimableFunds(),     9863 * USD);
         assertEq(loanV2.nextPaymentDueDate(), block.timestamp - 1 days);  // 1 day late
@@ -257,7 +219,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
         // Make second payment
         erc20_mint(USDC, 9, address(borrower), 1_009_863 * USD);
-        
+
         assertEq(loanV2.drawableFunds(),      0);
         assertEq(loanV2.claimableFunds(),     20_056_692599);
         assertEq(loanV2.nextPaymentDueDate(), block.timestamp);  // On time
@@ -269,7 +231,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(loanV2.drawableFunds(),      0);
         assertEq(loanV2.claimableFunds(),     1_029_919_692599);
-        assertEq(loanV2.nextPaymentDueDate(), block.timestamp + loanV2.paymentInterval()); 
+        assertEq(loanV2.nextPaymentDueDate(), block.timestamp + loanV2.paymentInterval());
         assertEq(loanV2.principal(),          0);
         assertEq(loanV2.paymentsRemaining(),  0);
     }
