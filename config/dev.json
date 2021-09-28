@@ -1,11 +1,8 @@
 {
   "language": "Solidity",
   "sources": {
-    "modules/debt-locker/contracts/DebtLockerFactory.sol": {
-      "urls": ["modules/debt-locker/contracts/DebtLockerFactory.sol"]
-    },
-    "modules/loan/contracts/MapleLoanFactory.sol": {
-      "urls": ["modules/loan/contracts/MapleLoanFactory.sol"]
+    "contracts/test/ParityTest.t.sol": {
+      "urls": ["contracts/test/ParityTest.t.sol"]
     }
   },
   "settings": {

@@ -18,17 +18,18 @@ skip_build=$([ "$build" == "0" ] && echo "1" || echo "0")
 
 [[ $SKIP_MAINNET_CHECK || "$ETH_RPC_URL" && "$(seth chain)" == "ethlive" ]] || { echo "Please set a mainnet ETH_RPC_URL"; exit 1; }
 
-export DAPP_TEST_TIMESTAMP=1622483493
-export DAPP_TEST_NUMBER=12543537
+export DAPP_TEST_TIMESTAMP=1632329211
+export DAPP_TEST_NUMBER=13276702
 export DAPP_SOLC_VERSION=0.8.7
 export DAPP_SRC="contracts"
 export DAPP_LINK_TEST_LIBRARIES=0
 export DAPP_STANDARD_JSON=$config
+export DAPP_TEST_ADDRESS=0xA6cCb9483E3E7a737E3a4F5B72a1Ce51838ba122
 
 if [ "$skip_build" = "1" ]; then export DAPP_SKIP_BUILD=1; fi
 
 if [ -z "$test" ]; then match="[contracts/test/*.t.sol]"; dapp_test_verbosity=2; else match=$test; dapp_test_verbosity=2; fi
 
-echo LANG=C.UTF-8 dapp test --match "$match" --rpc-url "$ETH_RPC_URL" --verbosity $dapp_test_verbosity --cache "cache/dapp-cache" --fuzz-runs $runs
+echo LANG=C.UTF-8 dapp test --match "$match" --rpc-url "$ETH_RPC_URL" --verbosity $dapp_test_verbosity --fuzz-runs $runs
 
-LANG=C.UTF-8 dapp test --match "$match" --rpc-url "$ETH_RPC_URL" --verbosity $dapp_test_verbosity --cache "cache/dapp-cache" --fuzz-runs $runs
+LANG=C.UTF-8 dapp test --match "$match" --rpc-url "$ETH_RPC_URL" --verbosity $dapp_test_verbosity --fuzz-runs $runs
