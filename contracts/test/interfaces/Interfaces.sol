@@ -28,7 +28,13 @@ interface IMapleGlobalsLike {
 
     function governor() external view returns (address);
 
+    function investorFee() external view returns (uint256);
+
     function setValidLoanFactory(address loanFactory, bool valid) external;
+
+    function setValidSubFactory(address superFactory, address subFactory, bool valid) external;
+
+    function treasuryFee() external view returns (uint256);
 
 }
 

@@ -35,6 +35,7 @@ contract AddressRegistry {
     /*** Deployed Pool Contracts ***/
     /*******************************/
     
+    address constant ORTHOGONAL_PD      = 0xA6cCb9483E3E7a737E3a4F5B72a1Ce51838ba122;
     address constant ORTHOGONAL_POOL    = 0xFeBd6F15Df3B73DC4307B1d7E65D46413e710C27;
     address constant ORTHOGONAL_SL      = 0x12B2BbBfAB2CE6789DF5659E9AC27A4A91C96C5C;
     address constant ORTHOGONAL_LL      = 0xB5321058E209E0F6C1216A7c7922B6962681DD77;
