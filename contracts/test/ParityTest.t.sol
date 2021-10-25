@@ -45,15 +45,19 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
     uint256 start;
 
+    // Mainnet State Variables
+    uint256 pool_principalOut;
+    uint256 pool_interestSum;
+    uint256 usdc_liquidityLockerBal;
+    uint256 usdc_stakeLockerBal;
+    uint256 usdc_poolDelegateBal;
+    uint256 usdc_treasuryBal;
+
     Borrower borrower;
 
     DebtLocker            debtLockerImplementation;
     DebtLockerFactory     debtLockerFactory;
     DebtLockerInitializer debtLockerInitializer;
-
-    MapleLoan            loanImplementation;
-    MapleLoanFactory     loanFactory;
-    MapleLoanInitializer loanInitializer;
 
     ILoanV1Like loanV1;
     IMapleLoan  loanV2;
@@ -63,6 +67,10 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
     IERC20 usdc = IERC20(USDC);
     IERC20 wbtc = IERC20(WBTC);
+
+    MapleLoan            loanImplementation;
+    MapleLoanFactory     loanFactory;
+    MapleLoanInitializer loanInitializer;
 
     function setUp() external {
 
@@ -151,26 +159,23 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         uint256 fundAmount       = 1_000_000 * USD;
         uint256 establishmentFee = fundAmount * 25 * 90 / 365 / 10_000;  // Investor fee and treasury fee are both 25bps
 
-        // Initial Protocol State
-        uint256[6] memory poolState;
-
-        assertEq(poolState[0] = pool.principalOut(),            PRINCIPAL_OUT);
-        assertEq(poolState[1] = pool.interestSum(),             INTEREST_SUM);
-        assertEq(poolState[2] = usdc.balanceOf(ORTHOGONAL_LL),  LL_USDC_BAL);
-        assertEq(poolState[3] = usdc.balanceOf(ORTHOGONAL_SL),  SL_USDC_BAL);
-        assertEq(poolState[4] = usdc.balanceOf(ORTHOGONAL_PD),  PD_USDC_BAL);
-        assertEq(poolState[5] = usdc.balanceOf(MAPLE_TREASURY), TREASURY_USDC_BAL);
+        assertEq(pool_principalOut       = pool.principalOut(),            PRINCIPAL_OUT);
+        assertEq(pool_interestSum        = pool.interestSum(),             INTEREST_SUM);
+        assertEq(usdc_liquidityLockerBal = usdc.balanceOf(ORTHOGONAL_LL),  LL_USDC_BAL);
+        assertEq(usdc_stakeLockerBal     = usdc.balanceOf(ORTHOGONAL_SL),  SL_USDC_BAL);
+        assertEq(usdc_poolDelegateBal    = usdc.balanceOf(ORTHOGONAL_PD),  PD_USDC_BAL);
+        assertEq(usdc_treasuryBal        = usdc.balanceOf(MAPLE_TREASURY), TREASURY_USDC_BAL);
         
         assertEq(usdc.balanceOf(address(loanV2)), 0);
         
         pool.fundLoan(address(loanV2), address(debtLockerFactory), fundAmount);
 
-        assertEq(pool.principalOut(),             poolState[0] += fundAmount);
-        assertEq(pool.interestSum(),              poolState[1] += 0);
-        assertEq(usdc.balanceOf(ORTHOGONAL_LL),   poolState[2] -= fundAmount);
-        assertEq(usdc.balanceOf(ORTHOGONAL_SL),   poolState[3]);
-        assertEq(usdc.balanceOf(ORTHOGONAL_PD),   poolState[4] += establishmentFee);  // Investor estab fee
-        assertEq(usdc.balanceOf(MAPLE_TREASURY),  poolState[5] += establishmentFee);  // Treasury estab fee
+        assertEq(pool.principalOut(),             pool_principalOut       += fundAmount);
+        assertEq(pool.interestSum(),              pool_interestSum        += 0);
+        assertEq(usdc.balanceOf(ORTHOGONAL_LL),   usdc_liquidityLockerBal -= fundAmount);
+        assertEq(usdc.balanceOf(ORTHOGONAL_SL),   usdc_stakeLockerBal     += 0);
+        assertEq(usdc.balanceOf(ORTHOGONAL_PD),   usdc_poolDelegateBal    += establishmentFee);  // Investor estab fee
+        assertEq(usdc.balanceOf(MAPLE_TREASURY),  usdc_treasuryBal        += establishmentFee);  // Treasury estab fee
 
         assertEq(usdc.balanceOf(address(loanV2)), fundAmount - establishmentFee * 2);  // Remaining funds
         
@@ -253,12 +258,12 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
         uint256 ongoingFee = interestPortion * 1000 / 10_000;  // Applies to both StakeLocker and Pool Delegate since both have 10% ongoing fees
 
-        assertEq(pool.principalOut(),            poolState[0]);
-        assertEq(pool.interestSum(),             poolState[1] += interestPortion - 2 * ongoingFee);  // 80% of interest
-        assertEq(usdc.balanceOf(ORTHOGONAL_LL),  poolState[2] += interestPortion - 2 * ongoingFee);  // 80% of interest
-        assertEq(usdc.balanceOf(ORTHOGONAL_SL),  poolState[3] += ongoingFee);                        // 10% of interest
-        assertEq(usdc.balanceOf(ORTHOGONAL_PD),  poolState[4] += ongoingFee);                        // 10% of interest
-        assertEq(usdc.balanceOf(MAPLE_TREASURY), poolState[5]);                                      // Treasury estab fee
+        assertEq(pool.principalOut(),            pool_principalOut       += 0);
+        assertEq(pool.interestSum(),             pool_interestSum        += interestPortion - 2 * ongoingFee);  // 80% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_LL),  usdc_liquidityLockerBal += interestPortion - 2 * ongoingFee);  // 80% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_SL),  usdc_stakeLockerBal     += ongoingFee);                        // 10% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_PD),  usdc_poolDelegateBal    += ongoingFee);                        // 10% of interest
+        assertEq(usdc.balanceOf(MAPLE_TREASURY), usdc_treasuryBal        += 0);
 
         /********************************/
         /*** Make Payment 2 (On time) ***/
@@ -350,12 +355,12 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
         ongoingFee = totalInterest * 1000 / 10_000;  // Applies to both StakeLocker and Pool Delegate since both have 10% ongoing fees
 
-        assertEq(pool.principalOut(),            poolState[0] -= principalPortion);
-        assertEq(pool.interestSum(),             poolState[1] += totalInterest - (2 * ongoingFee));                     // 80% of interest
-        assertEq(usdc.balanceOf(ORTHOGONAL_LL),  poolState[2] += principalPortion + totalInterest - (2 * ongoingFee));  // 80% of interest
-        assertEq(usdc.balanceOf(ORTHOGONAL_SL),  poolState[3] += ongoingFee);                                           // 10% of interest
-        assertEq(usdc.balanceOf(ORTHOGONAL_PD),  poolState[4] += ongoingFee);                                           // 10% of interest
-        assertEq(usdc.balanceOf(MAPLE_TREASURY), poolState[5]);                                                         // Treasury estab fee
+        assertEq(pool.principalOut(),            pool_principalOut       -= principalPortion);
+        assertEq(pool.interestSum(),             pool_interestSum        += totalInterest - (2 * ongoingFee));                     // 80% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_LL),  usdc_liquidityLockerBal += principalPortion + totalInterest - (2 * ongoingFee));  // 80% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_SL),  usdc_stakeLockerBal     += ongoingFee);                                           // 10% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_PD),  usdc_poolDelegateBal    += ongoingFee);                                           // 10% of interest
+        assertEq(usdc.balanceOf(MAPLE_TREASURY), usdc_treasuryBal        += 0);
     }
 
 }
