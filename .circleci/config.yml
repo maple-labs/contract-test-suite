@@ -10,6 +10,9 @@ jobs:
           command: |
             GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no" git clone git@github.com:maple-labs/contract-test-suite.git .
             git checkout $CIRCLE_BRANCH
+            mkdir cache
+            cd cache
+            GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no" git clone git@github.com:maple-labs/cts-cache.git
       - run:
           name: Build and test contracts
           command: |
