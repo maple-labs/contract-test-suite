@@ -10,3 +10,6 @@
 [submodule "modules/erc20"]
 	path = modules/erc20
 	url = https://github.com/maple-labs/erc20.git
+[submodule "cache/cts-cache"]
+	path = cache/cts-cache
+	url = https://github.com/maple-labs/cts-cache
