@@ -182,29 +182,27 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         /*********************/
         /*** Drawdown Loan ***/
         /*********************/
-        {
-            uint256 drawableFunds = fundAmount - establishmentFee * 2;
+        uint256 drawableFunds = fundAmount - establishmentFee * 2;
 
-            erc20_mint(WBTC, 0, address(borrower), 250 * BTC);
+        erc20_mint(WBTC, 0, address(borrower), 250 * BTC);
 
-            assertEq(loanV2.drawableFunds(),            drawableFunds);
-            assertEq(usdc.balanceOf(address(loanV2)),   drawableFunds);
-            assertEq(usdc.balanceOf(address(borrower)), 0);
-            assertEq(wbtc.balanceOf(address(borrower)), 250 * BTC);
-            assertEq(wbtc.balanceOf(address(loanV2)),   0);
-            assertEq(loanV2.collateral(),               0);
+        assertEq(loanV2.drawableFunds(),            drawableFunds);
+        assertEq(usdc.balanceOf(address(loanV2)),   drawableFunds);
+        assertEq(usdc.balanceOf(address(borrower)), 0);
+        assertEq(wbtc.balanceOf(address(borrower)), 250 * BTC);
+        assertEq(wbtc.balanceOf(address(loanV2)),   0);
+        assertEq(loanV2.collateral(),               0);
 
-            borrower.erc20_transfer(WBTC, address(loanV2), 250 * BTC);
-            borrower.loan_postCollateral(address(loanV2), 0);
-            borrower.loan_drawdownFunds(address(loanV2), drawableFunds, address(borrower));
+        borrower.erc20_transfer(WBTC, address(loanV2), 250 * BTC);
+        borrower.loan_postCollateral(address(loanV2), 0);
+        borrower.loan_drawdownFunds(address(loanV2), drawableFunds, address(borrower));
 
-            assertEq(loanV2.drawableFunds(),            0);
-            assertEq(usdc.balanceOf(address(loanV2)),   0);
-            assertEq(usdc.balanceOf(address(borrower)), drawableFunds);
-            assertEq(wbtc.balanceOf(address(borrower)), 0);
-            assertEq(wbtc.balanceOf(address(loanV2)),   250 * BTC);
-            assertEq(loanV2.collateral(),               250 * BTC);
-        }
+        assertEq(loanV2.drawableFunds(),            0);
+        assertEq(usdc.balanceOf(address(loanV2)),   0);
+        assertEq(usdc.balanceOf(address(borrower)), drawableFunds);
+        assertEq(wbtc.balanceOf(address(borrower)), 0);
+        assertEq(wbtc.balanceOf(address(loanV2)),   250 * BTC);
+        assertEq(loanV2.collateral(),               250 * BTC);
         
         /********************************/
         /*** Make Payment 1 (On time) ***/
