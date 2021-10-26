@@ -28,7 +28,15 @@ interface IMapleGlobalsLike {
 
     function governor() external view returns (address);
 
+    function investorFee() external view returns (uint256);
+
     function setValidLoanFactory(address loanFactory, bool valid) external;
+
+    function setValidSubFactory(address superFactory, address subFactory, bool valid) external;
+
+    function isValidSubFactory(address superFactory, address subFactory, uint8 type_) external returns (bool);
+
+    function treasuryFee() external view returns (uint256);
 
 }
 
@@ -42,7 +50,11 @@ interface IPoolFactoryLike {}
 
 interface IPoolLike {
 
+    function claim(address loan, address dlFactory) external returns (uint256[7] memory claimInfo);
+
     function fundLoan(address loan, address debtLockerFactory, uint256 amount) external;
+
+    function interestSum() external view returns (uint256);
 
     function principalOut() external view returns (uint256);
 
