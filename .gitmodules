@@ -10,3 +10,6 @@
 [submodule "modules/erc20"]
 	path = modules/erc20
 	url = https://github.com/maple-labs/erc20.git
+[submodule "modules/liquidations"]
+	path = modules/liquidations
+	url = https://github.com/maple-labs/liquidations
