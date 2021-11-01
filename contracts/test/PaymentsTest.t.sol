@@ -175,197 +175,219 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(pool.principalOut(),             pool_principalOut       += fundAmount);
         assertEq(pool.interestSum(),              pool_interestSum        += 0);
         assertEq(usdc.balanceOf(ORTHOGONAL_LL),   usdc_liquidityLockerBal -= fundAmount);
-        // assertEq(usdc.balanceOf(ORTHOGONAL_SL),   usdc_stakeLockerBal     += 0);
-        // assertEq(usdc.balanceOf(ORTHOGONAL_PD),   usdc_poolDelegateBal    += establishmentFee);  // Investor estab fee
-        // assertEq(usdc.balanceOf(MAPLE_TREASURY),  usdc_treasuryBal        += establishmentFee);  // Treasury estab fee
+        assertEq(usdc.balanceOf(ORTHOGONAL_SL),   usdc_stakeLockerBal     += 0);
+        assertEq(usdc.balanceOf(ORTHOGONAL_PD),   usdc_poolDelegateBal    += establishmentFee);  // Investor estab fee
+        assertEq(usdc.balanceOf(MAPLE_TREASURY),  usdc_treasuryBal        += establishmentFee);  // Treasury estab fee
 
-        // assertEq(usdc.balanceOf(address(loanV2)), fundAmount - establishmentFee * 2);  // Remaining funds
+        assertEq(usdc.balanceOf(address(loanV2)), fundAmount - establishmentFee * 2);  // Remaining funds
         
         /*********************/
         /*** Drawdown Loan ***/
         /*********************/
         uint256 drawableFunds = fundAmount - establishmentFee * 2;
 
-        // erc20_mint(WBTC, 0, address(borrower), 5 * BTC);
+        erc20_mint(WBTC, 0, address(borrower), 5 * BTC);
 
-        // assertEq(loanV2.drawableFunds(),            drawableFunds);
-        // assertEq(usdc.balanceOf(address(loanV2)),   drawableFunds);
-        // assertEq(usdc.balanceOf(address(borrower)), 0);
-        // assertEq(wbtc.balanceOf(address(borrower)), 5 * BTC);
-        // assertEq(wbtc.balanceOf(address(loanV2)),   0);
-        // assertEq(loanV2.collateral(),               0);
+        assertEq(loanV2.drawableFunds(),            drawableFunds);
+        assertEq(usdc.balanceOf(address(loanV2)),   drawableFunds);
+        assertEq(usdc.balanceOf(address(borrower)), 0);
+        assertEq(wbtc.balanceOf(address(borrower)), 5 * BTC);
+        assertEq(wbtc.balanceOf(address(loanV2)),   0);
+        assertEq(loanV2.collateral(),               0);
 
-        // borrower.erc20_transfer(WBTC, address(loanV2), 5 * BTC);
-        // borrower.loan_postCollateral(address(loanV2), 0);
-        // borrower.loan_drawdownFunds(address(loanV2), drawableFunds, address(borrower));
+        borrower.erc20_transfer(WBTC, address(loanV2), 5 * BTC);
+        borrower.loan_postCollateral(address(loanV2), 0);
+        borrower.loan_drawdownFunds(address(loanV2), drawableFunds, address(borrower));
 
-        // assertEq(loanV2.drawableFunds(),            0);
-        // assertEq(usdc.balanceOf(address(loanV2)),   0);
-        // assertEq(usdc.balanceOf(address(borrower)), drawableFunds);
-        // assertEq(wbtc.balanceOf(address(borrower)), 0);
-        // assertEq(wbtc.balanceOf(address(loanV2)),   5 * BTC);
-        // assertEq(loanV2.collateral(),               5 * BTC);
+        assertEq(loanV2.drawableFunds(),            0);
+        assertEq(usdc.balanceOf(address(loanV2)),   0);
+        assertEq(usdc.balanceOf(address(borrower)), drawableFunds);
+        assertEq(wbtc.balanceOf(address(borrower)), 0);
+        assertEq(wbtc.balanceOf(address(loanV2)),   5 * BTC);
+        assertEq(loanV2.collateral(),               5 * BTC);
         
         // /********************************/
         // /*** Make Payment 1 (On time) ***/
         // /********************************/
 
-        // hevm.warp(loanV2.nextPaymentDueDate());
+        hevm.warp(loanV2.nextPaymentDueDate());
 
-        // // Check details for upcoming payment #1
-        // ( uint256 principalPortion, uint256 interestPortion ) = loanV2.getNextPaymentBreakdown();
+        // Check details for upcoming payment #1
+        ( uint256 principalPortion, uint256 interestPortion ) = loanV2.getNextPaymentBreakdown();
 
-        // assertEq(principalPortion, 0);
-        // assertEq(interestPortion,  9863_013698);
+        assertEq(principalPortion, 0);
+        assertEq(interestPortion,  9863_013698);
 
-        // // Make first payment
-        // erc20_mint(USDC, 9, address(borrower), interestPortion);
+        // Make first payment
+        erc20_mint(USDC, 9, address(borrower), interestPortion);
 
-        // assertEq(loanV2.drawableFunds(),      0);
-        // assertEq(loanV2.claimableFunds(),     0);
-        // assertEq(loanV2.nextPaymentDueDate(), start + 30 days);
-        // assertEq(loanV2.principal(),          1_000_000 * USD);
-        // assertEq(loanV2.paymentsRemaining(),  3);
+        assertEq(loanV2.drawableFunds(),      0);
+        assertEq(loanV2.claimableFunds(),     0);
+        assertEq(loanV2.nextPaymentDueDate(), start + 30 days);
+        assertEq(loanV2.principal(),          1_000_000 * USD);
+        assertEq(loanV2.paymentsRemaining(),  3);
 
-        // assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
 
-        // borrower.erc20_transfer(USDC, address(loanV2), interestPortion);
-        // borrower.loan_makePayment(address(loanV2), 0);
+        borrower.erc20_transfer(USDC, address(loanV2), interestPortion);
+        borrower.loan_makePayment(address(loanV2), 0);
 
-        // assertEq(loanV2.drawableFunds(),      0);
-        // assertEq(loanV2.claimableFunds(),     interestPortion);
-        // assertEq(loanV2.nextPaymentDueDate(), start + 60 days);
-        // assertEq(loanV2.principal(),          1_000_000 * USD);
-        // assertEq(loanV2.paymentsRemaining(),  2);
+        assertEq(loanV2.drawableFunds(),      0);
+        assertEq(loanV2.claimableFunds(),     interestPortion);
+        assertEq(loanV2.nextPaymentDueDate(), start + 60 days);
+        assertEq(loanV2.principal(),          1_000_000 * USD);
+        assertEq(loanV2.paymentsRemaining(),  2);
 
-        // assertEq(usdc.balanceOf(address(loanV2)), interestPortion);
+        assertEq(usdc.balanceOf(address(loanV2)), interestPortion);
 
         /************************************/
         /*** Claim Funds as Pool Delegate ***/
         /************************************/
-        // uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
 
-        // assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
 
-        // assertEq(details[0], interestPortion);
-        // assertEq(details[1], interestPortion);
-        // assertEq(details[2], 0);
-        // assertEq(details[3], 0);
-        // assertEq(details[4], 0);
-        // assertEq(details[5], 0);
-        // assertEq(details[6], 0);
+        assertEq(details[0], interestPortion);
+        assertEq(details[1], interestPortion);
+        assertEq(details[2], 0);
+        assertEq(details[3], 0);
+        assertEq(details[4], 0);
+        assertEq(details[5], 0);
+        assertEq(details[6], 0);
 
-        // uint256 ongoingFee = interestPortion * 1000 / 10_000;  // Applies to both StakeLocker and Pool Delegate since both have 10% ongoing fees
+        uint256 ongoingFee = interestPortion * 1000 / 10_000;  // Applies to both StakeLocker and Pool Delegate since both have 10% ongoing fees
 
-        // assertEq(pool.principalOut(),            pool_principalOut       += 0);
-        // assertEq(pool.interestSum(),             pool_interestSum        += interestPortion - 2 * ongoingFee);  // 80% of interest
-        // assertEq(usdc.balanceOf(ORTHOGONAL_LL),  usdc_liquidityLockerBal += interestPortion - 2 * ongoingFee);  // 80% of interest
-        // assertEq(usdc.balanceOf(ORTHOGONAL_SL),  usdc_stakeLockerBal     += ongoingFee);                        // 10% of interest
-        // assertEq(usdc.balanceOf(ORTHOGONAL_PD),  usdc_poolDelegateBal    += ongoingFee);                        // 10% of interest
-        // assertEq(usdc.balanceOf(MAPLE_TREASURY), usdc_treasuryBal        += 0);
+        assertEq(pool.principalOut(),            pool_principalOut       += 0);
+        assertEq(pool.interestSum(),             pool_interestSum        += interestPortion - 2 * ongoingFee);  // 80% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_LL),  usdc_liquidityLockerBal += interestPortion - 2 * ongoingFee);  // 80% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_SL),  usdc_stakeLockerBal     += ongoingFee);                        // 10% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_PD),  usdc_poolDelegateBal    += ongoingFee);                        // 10% of interest
+        assertEq(usdc.balanceOf(MAPLE_TREASURY), usdc_treasuryBal        += 0);
 
         /*****************************/
         /*** Make Payment 2 (Late) ***/
         /*****************************/
 
-        // hevm.warp(loanV2.nextPaymentDueDate() + 1 days);  // 1 day late
+        hevm.warp(loanV2.nextPaymentDueDate() + 1 days);  // 1 day late
 
-        // // Check details for upcoming payment #2
-        // ( principalPortion, interestPortion ) = loanV2.getNextPaymentBreakdown();
+        // Check details for upcoming payment #2
+        ( principalPortion, interestPortion ) = loanV2.getNextPaymentBreakdown();
 
-        // uint256 lateInterest = 1972_602739;
-        // uint256 lateFee = 50_000 * USD; // Rate for late payment over the principal
+        uint256 lateInterest = 1972_602739; // 1 day worth of interest + lateInterestPremium
+        uint256 lateFee = 50_000 * USD; // Rate for late payment over the principal
 
-        // emit log_named_uint("late fee", lateFee);
-        // emit log_named_uint("interestPortion", interestPortion);
-        // emit log_named_uint("sub", interestPortion -9863_013698-lateFee);
+        assertEq(principalPortion, 0);
+        assertEq(interestPortion,  9863_013698 + lateFee + lateInterest);  // Interest + 1972_602739
+
+        // Make second payment
+        erc20_mint(USDC, 9, address(borrower), interestPortion);
+
+        assertEq(loanV2.drawableFunds(),      0);
+        assertEq(loanV2.claimableFunds(),     0);                // Claim has been made
+        assertEq(loanV2.nextPaymentDueDate(), start + 60 days);  // Payment 2 due date
+        assertEq(loanV2.principal(),          1_000_000 * USD);
+        assertEq(loanV2.paymentsRemaining(),  2);
+
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
+
+        borrower.erc20_transfer(USDC, address(loanV2), interestPortion);
+        borrower.loan_makePayment(address(loanV2), 0);
+
+        assertEq(loanV2.drawableFunds(),      0);
+        assertEq(loanV2.claimableFunds(),     interestPortion);
+        assertEq(loanV2.nextPaymentDueDate(), start + 90 days);  // Payment 3 due date
+        assertEq(loanV2.principal(),          1_000_000 * USD);
+        assertEq(loanV2.paymentsRemaining(),  1);
+
+        assertEq(usdc.balanceOf(address(loanV2)), interestPortion);
+
+        /************************************/
+        /*** Claim Funds as Pool Delegate ***/
+        /************************************/
+        details = pool.claim(address(loanV2), address(debtLockerFactory));
+
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
+
+        assertEq(details[0], interestPortion);
+        assertEq(details[1], interestPortion);
+        assertEq(details[2], 0);
+        assertEq(details[3], 0);
+        assertEq(details[4], 0);
+        assertEq(details[5], 0);
+        assertEq(details[6], 0);
+
+        ongoingFee = interestPortion * 1000 / 10_000;  // Applies to both StakeLocker and Pool Delegate since both have 10% ongoing fees
+
+        assertEq(pool.principalOut(),            pool_principalOut       += 0);
+        assertEq(pool.interestSum(),             pool_interestSum        += interestPortion - 2 * ongoingFee);  // 80% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_LL),  usdc_liquidityLockerBal += interestPortion - 2 * ongoingFee);  // 80% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_SL),  usdc_stakeLockerBal     += ongoingFee);                        // 10% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_PD),  usdc_poolDelegateBal    += ongoingFee);                        // 10% of interest
+        assertEq(usdc.balanceOf(MAPLE_TREASURY), usdc_treasuryBal        += 0);
 
 
-        // assertEq(principalPortion, 0);
-        // assertEq(interestPortion,  9863_013698 + lateFee + lateInterest);  // Interest + 1972_602739
+        // /*****************************/
+        // /*** Make Payment 3 (Late) ***/
+        // /*****************************/
 
-        // // Make second payment
-        // erc20_mint(USDC, 9, address(borrower), interestPortion);
+        hevm.warp(loanV2.nextPaymentDueDate() + 2 days);
 
-        // assertEq(loanV2.drawableFunds(),      0);
-        // assertEq(loanV2.claimableFunds(),     0);                // Claim has been made
-        // assertEq(loanV2.nextPaymentDueDate(), start + 60 days);  // Payment 2 due date
-        // assertEq(loanV2.principal(),          1_000_000 * USD);
-        // assertEq(loanV2.paymentsRemaining(),  2);
+        // Check details for upcoming payment #3
+        ( principalPortion, interestPortion ) = loanV2.getNextPaymentBreakdown();
+        uint256 totalPaid = principalPortion + interestPortion;
 
-        // assertEq(usdc.balanceOf(address(loanV2)), 0);
+        lateInterest = 3945_205479; // 2 day worth of interest + lateInterestPremium
+        lateFee = 50_000 * USD; // Rate for late payment over the principal
 
-        // borrower.erc20_transfer(USDC, address(loanV2), interestPortion);
-        // borrower.loan_makePayment(address(loanV2), 0);
+        assertEq(principalPortion, 1_000_000 * USD);
+        assertEq(interestPortion, 9863_013698  + lateInterest + lateFee);
 
-        // assertEq(loanV2.drawableFunds(),      0);
-        // assertEq(loanV2.claimableFunds(),     interestPortion);
-        // assertEq(loanV2.nextPaymentDueDate(), start + 90 days);  // Payment 3 due date
-        // assertEq(loanV2.principal(),          1_000_000 * USD);
-        // assertEq(loanV2.paymentsRemaining(),  1);
+        // Make second payment
+        erc20_mint(USDC, 9, address(borrower), totalPaid);  // Principal + interest
 
-        // assertEq(usdc.balanceOf(address(loanV2)), interestPortion);
+        assertEq(loanV2.drawableFunds(),      0);
+        assertEq(loanV2.claimableFunds(),     0);
+        assertEq(loanV2.nextPaymentDueDate(), start + 90 days);  // Payment 3 due date
+        assertEq(loanV2.principal(),          1_000_000 * USD);
+        assertEq(loanV2.paymentsRemaining(),  1);
 
-        // /******************************/
-        // /*** Make Payment 3 (Final) ***/
-        // /******************************/
+        borrower.erc20_transfer(USDC, address(loanV2), totalPaid);
+        borrower.loan_makePayment(address(loanV2), 0);
 
-        // hevm.warp(loanV2.nextPaymentDueDate());
+        assertEq(loanV2.drawableFunds(),      0);
+        assertEq(loanV2.claimableFunds(),     1_000_000 * USD + interestPortion);
+        assertEq(loanV2.nextPaymentDueDate(), start + 120 days); 
+        assertEq(loanV2.principal(),          0);
+        assertEq(loanV2.paymentsRemaining(),  0);
 
-        // // Check details for upcoming payment #3
-        // ( principalPortion, interestPortion ) = loanV2.getNextPaymentBreakdown();
-
-        // assertEq(principalPortion, 1_000_000 * USD);
-        // assertEq(interestPortion,  9863_013698);
-
-        // // Make second payment
-        // erc20_mint(USDC, 9, address(borrower), 1_009_863_013698);  // Principal + interest
-
-        // assertEq(loanV2.drawableFunds(),      0);
-        // assertEq(loanV2.claimableFunds(),     interestPortion);
-        // assertEq(loanV2.nextPaymentDueDate(), start + 90 days);  // Payment 3 due date
-        // assertEq(loanV2.principal(),          1_000_000 * USD);
-        // assertEq(loanV2.paymentsRemaining(),  1);
-
-        // assertEq(usdc.balanceOf(address(loanV2)), interestPortion);
-
-        // borrower.erc20_transfer(USDC, address(loanV2), 1_009_863_013698);
-        // borrower.loan_makePayment(address(loanV2), 0);
-
-        // assertEq(loanV2.drawableFunds(),      0);
-        // assertEq(loanV2.claimableFunds(),     1_000_000 * USD + interestPortion * 2);
-        // assertEq(loanV2.nextPaymentDueDate(), start + 120 days); 
-        // assertEq(loanV2.principal(),          0);
-        // assertEq(loanV2.paymentsRemaining(),  0);
-
-        // assertEq(usdc.balanceOf(address(loanV2)), 1_000_000 * USD + interestPortion * 2);
+        assertEq(usdc.balanceOf(address(loanV2)), 1_000_000 * USD + interestPortion);
 
         /**************************************************/
         /*** Claim Funds as Pool Delegate (Two Payments ***/
         /**************************************************/
         
-        // details = pool.claim(address(loanV2), address(debtLockerFactory));
+        details = pool.claim(address(loanV2), address(debtLockerFactory));
 
-        // assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
 
-        // uint256 totalInterest = interestPortion * 2;
+        uint256 totalInterest = interestPortion;
 
-        // assertEq(details[0], principalPortion + totalInterest);
-        // assertEq(details[1], totalInterest);
-        // assertEq(details[2], principalPortion);
-        // assertEq(details[3], 0);
-        // assertEq(details[4], 0);
-        // assertEq(details[5], 0);
-        // assertEq(details[6], 0);
+        assertEq(details[0], totalPaid);
+        assertEq(details[1], totalInterest);
+        assertEq(details[2], principalPortion);
+        assertEq(details[3], 0);
+        assertEq(details[4], 0);
+        assertEq(details[5], 0);
+        assertEq(details[6], 0);
 
-        // ongoingFee = totalInterest * 1000 / 10_000;  // Applies to both StakeLocker and Pool Delegate since both have 10% ongoing fees
+        ongoingFee = totalInterest * 1000 / 10_000;  // Applies to both StakeLocker and Pool Delegate since both have 10% ongoing fees
 
-        // assertEq(pool.principalOut(),            pool_principalOut       -= principalPortion);
-        // assertEq(pool.interestSum(),             pool_interestSum        += totalInterest - (2 * ongoingFee));                     // 80% of interest
-        // assertEq(usdc.balanceOf(ORTHOGONAL_LL),  usdc_liquidityLockerBal += principalPortion + totalInterest - (2 * ongoingFee));  // 80% of interest
-        // assertEq(usdc.balanceOf(ORTHOGONAL_SL),  usdc_stakeLockerBal     += ongoingFee);                                           // 10% of interest
-        // assertEq(usdc.balanceOf(ORTHOGONAL_PD),  usdc_poolDelegateBal    += ongoingFee);                                           // 10% of interest
-        // assertEq(usdc.balanceOf(MAPLE_TREASURY), usdc_treasuryBal        += 0);
+        assertEq(pool.principalOut(),            pool_principalOut       -= principalPortion);
+        assertEq(pool.interestSum(),             pool_interestSum        += totalInterest - (2 * ongoingFee));                     // 80% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_LL),  usdc_liquidityLockerBal += principalPortion + totalInterest - (2 * ongoingFee));  // 80% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_SL),  usdc_stakeLockerBal     += ongoingFee);                                           // 10% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_PD),  usdc_poolDelegateBal    += ongoingFee);                                           // 10% of interest
+        assertEq(usdc.balanceOf(MAPLE_TREASURY), usdc_treasuryBal        += 0);
     }
 
 
