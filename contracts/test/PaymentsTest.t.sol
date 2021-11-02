@@ -380,4 +380,136 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(usdc.balanceOf(MAPLE_TREASURY), usdc_treasuryBal        += 0);
     }
 
+    function test_closeLoan() external {
+        /*********************/
+        /*** Deploy LoanV2 ***/
+        /*********************/
+
+        address[2] memory assets = [WBTC, USDC];
+
+        uint256[6] memory parameters = [
+            uint256(10 days),  // 10 day grace period
+            uint256(30 days),  // 30 day payment interval
+            uint256(3),        // 3 payments (90 day term)
+            uint256(0.12e18),  // 12% interest
+            uint256(0.04e18),  // 4% early repayment discount
+            uint256(0.6e18)    // 6% late fee premium
+        ];
+
+        // 5 BTC @ ~$58k = $290k = 29% collateralized, interest only
+        uint256[3] memory requests = [uint256(5 * BTC), uint256(1_000_000 * USD), uint256(1_000_000 * USD)];  
+
+        uint256[4] memory fees = [uint256(0), uint256(0.05e18), uint256(0), uint256(0.05e18)];  // TODO: Set up fees for parity
+
+        bytes memory arguments = loanInitializer.encodeArguments(address(borrower), assets, parameters, requests, fees);
+
+        loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments));
+
+        /*****************/
+        /*** Fund Loan ***/
+        /*****************/
+
+        uint256 fundAmount       = 1_000_000 * USD;
+        uint256 establishmentFee = fundAmount * 25 * 90 / 365 / 10_000;  // Investor fee and treasury fee are both 25bps
+
+        assertEq(pool_principalOut       = pool.principalOut(),            PRINCIPAL_OUT);
+        assertEq(pool_interestSum        = pool.interestSum(),             INTEREST_SUM);
+        assertEq(usdc_liquidityLockerBal = usdc.balanceOf(ORTHOGONAL_LL),  LL_USDC_BAL);
+        assertEq(usdc_stakeLockerBal     = usdc.balanceOf(ORTHOGONAL_SL),  SL_USDC_BAL);
+        assertEq(usdc_poolDelegateBal    = usdc.balanceOf(ORTHOGONAL_PD),  PD_USDC_BAL);
+        assertEq(usdc_treasuryBal        = usdc.balanceOf(MAPLE_TREASURY), TREASURY_USDC_BAL);
+        
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        
+        pool.fundLoan(address(loanV2), address(debtLockerFactory), fundAmount);
+
+        assertEq(pool.principalOut(),             pool_principalOut       += fundAmount);
+        assertEq(pool.interestSum(),              pool_interestSum        += 0);
+        assertEq(usdc.balanceOf(ORTHOGONAL_LL),   usdc_liquidityLockerBal -= fundAmount);
+        assertEq(usdc.balanceOf(ORTHOGONAL_SL),   usdc_stakeLockerBal     += 0);
+        assertEq(usdc.balanceOf(ORTHOGONAL_PD),   usdc_poolDelegateBal    += establishmentFee);  // Investor estab fee
+        assertEq(usdc.balanceOf(MAPLE_TREASURY),  usdc_treasuryBal        += establishmentFee);  // Treasury estab fee
+
+        assertEq(usdc.balanceOf(address(loanV2)), fundAmount - establishmentFee * 2);  // Remaining funds
+        
+        /*********************/
+        /*** Drawdown Loan ***/
+        /*********************/
+        uint256 drawableFunds = fundAmount - establishmentFee * 2;
+
+        erc20_mint(WBTC, 0, address(borrower), 5 * BTC);
+
+        assertEq(loanV2.drawableFunds(),            drawableFunds);
+        assertEq(usdc.balanceOf(address(loanV2)),   drawableFunds);
+        assertEq(usdc.balanceOf(address(borrower)), 0);
+        assertEq(wbtc.balanceOf(address(borrower)), 5 * BTC);
+        assertEq(wbtc.balanceOf(address(loanV2)),   0);
+        assertEq(loanV2.collateral(),               0);
+
+        borrower.erc20_transfer(WBTC, address(loanV2), 5 * BTC);
+        borrower.loan_postCollateral(address(loanV2), 0);
+        borrower.loan_drawdownFunds(address(loanV2), drawableFunds, address(borrower));
+
+        assertEq(loanV2.drawableFunds(),            0);
+        assertEq(usdc.balanceOf(address(loanV2)),   0);
+        assertEq(usdc.balanceOf(address(borrower)), drawableFunds);
+        assertEq(wbtc.balanceOf(address(borrower)), 0);
+        assertEq(wbtc.balanceOf(address(loanV2)),   5 * BTC);
+        assertEq(loanV2.collateral(),               5 * BTC);
+
+        /*******************************/
+        /*** Close loan after 5 days ***/
+        /*******************************/
+
+        hevm.warp(block.timestamp + 5 days);
+
+        uint256 principal    = 1_000_000 * USD;
+        uint256 earlyFee     = 50_000 * USD; // 5% on the principal 
+        uint256 totalPayment = principal + earlyFee;
+
+        // Make second payment
+        erc20_mint(USDC, 9, address(borrower), totalPayment);
+
+        assertEq(loanV2.drawableFunds(),      0);
+        assertEq(loanV2.claimableFunds(),     0);
+        assertEq(loanV2.nextPaymentDueDate(), start + 30 days);
+        assertEq(loanV2.principal(),          1_000_000 * USD);
+        assertEq(loanV2.paymentsRemaining(),  3);
+
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
+
+        borrower.erc20_transfer(USDC, address(loanV2), totalPayment);
+        borrower.loan_closeLoan(address(loanV2), 0);
+
+        assertEq(loanV2.drawableFunds(),      0);
+        assertEq(loanV2.claimableFunds(),     totalPayment);
+        assertEq(loanV2.nextPaymentDueDate(), 0); 
+        assertEq(loanV2.principal(),          0);
+        assertEq(loanV2.paymentsRemaining(),  0);
+
+        /************************************/
+        /*** Claim Funds as Pool Delegate ***/
+        /************************************/
+        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
+
+        assertEq(details[0], totalPayment);
+        assertEq(details[1], earlyFee);
+        assertEq(details[2], principal);
+        assertEq(details[3], 0);
+        assertEq(details[4], 0);
+        assertEq(details[5], 0);
+        assertEq(details[6], 0);
+
+        uint256 ongoingFee = earlyFee * 1000 / 10_000;  // Applies to both StakeLocker and Pool Delegate since both have 10% ongoing fees
+
+        assertEq(pool.principalOut(),            pool_principalOut       -= principal);
+        assertEq(pool.interestSum(),             pool_interestSum        += earlyFee - 2 * ongoingFee);                // 80% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_LL),  usdc_liquidityLockerBal += principal + earlyFee - (2 * ongoingFee));  // 80% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_SL),  usdc_stakeLockerBal     += ongoingFee);                               // 10% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_PD),  usdc_poolDelegateBal    += ongoingFee);                               // 10% of interest
+        assertEq(usdc.balanceOf(MAPLE_TREASURY), usdc_treasuryBal        += 0);
+
+    }
 }
