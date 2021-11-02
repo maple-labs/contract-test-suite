@@ -12,7 +12,7 @@ import { DebtLockerFactory }     from "../../modules/debt-locker/contracts/DebtL
 import { DebtLockerInitializer } from "../../modules/debt-locker/contracts/DebtLockerInitializer.sol";
 
 import { Liquidator }        from "../../modules/liquidations/contracts/Liquidator.sol";
-import { Rebalancer }        from "../../modules/liquidations/contracts/test/Liquidator.t.sol";
+import { Rebalancer }        from "../../modules/liquidations/contracts/test/mocks/Mocks.sol";
 import { SushiswapStrategy } from "../../modules/liquidations/contracts/SushiswapStrategy.sol";
 import { UniswapV2Strategy } from "../../modules/liquidations/contracts/UniswapV2Strategy.sol";
 
