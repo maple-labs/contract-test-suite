@@ -381,6 +381,7 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
     }
 
     function test_closeLoan() external {
+        
         /*********************/
         /*** Deploy LoanV2 ***/
         /*********************/
@@ -435,6 +436,7 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         /*********************/
         /*** Drawdown Loan ***/
         /*********************/
+
         uint256 drawableFunds = fundAmount - establishmentFee * 2;
 
         erc20_mint(WBTC, 0, address(borrower), 5 * BTC);
@@ -467,7 +469,7 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         uint256 earlyFee     = 50_000 * USD; // 5% on the principal 
         uint256 totalPayment = principal + earlyFee;
 
-        // Make second payment
+        // Close loan, paying a flat fee on principal
         erc20_mint(USDC, 9, address(borrower), totalPayment);
 
         assertEq(loanV2.drawableFunds(),      0);
@@ -478,6 +480,7 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
 
+        // TODO use approve + transferFrom
         borrower.erc20_transfer(USDC, address(loanV2), totalPayment);
         borrower.loan_closeLoan(address(loanV2), 0);
 
@@ -490,6 +493,7 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         /************************************/
         /*** Claim Funds as Pool Delegate ***/
         /************************************/
+
         uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
