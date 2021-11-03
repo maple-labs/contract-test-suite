@@ -11,11 +11,6 @@ import { DebtLocker }            from "../../modules/debt-locker/contracts/DebtL
 import { DebtLockerFactory }     from "../../modules/debt-locker/contracts/DebtLockerFactory.sol";
 import { DebtLockerInitializer } from "../../modules/debt-locker/contracts/DebtLockerInitializer.sol";
 
-import { Liquidator }        from "../../modules/liquidations/contracts/Liquidator.sol";
-import { Rebalancer }        from "../../modules/liquidations/contracts/test/mocks/Mocks.sol";
-import { SushiswapStrategy } from "../../modules/liquidations/contracts/SushiswapStrategy.sol";
-import { UniswapV2Strategy } from "../../modules/liquidations/contracts/UniswapV2Strategy.sol";
-
 import { IMapleLoan } from "../../modules/loan/contracts/interfaces/IMapleLoan.sol";
 
 import { MapleLoan }            from "../../modules/loan/contracts/MapleLoan.sol";
@@ -23,18 +18,10 @@ import { MapleLoanFactory }     from "../../modules/loan/contracts/MapleLoanFact
 import { MapleLoanInitializer } from "../../modules/loan/contracts/MapleLoanInitializer.sol";
 
 import { Borrower } from "./accounts/Borrower.sol";
-import { Keeper }   from "./accounts/Keeper.sol";
-import { Lender }   from "./accounts/Lender.sol";
 
 import { AddressRegistry } from "../AddressRegistry.sol";
 
-import {
-    ILoanV1Like,
-    IMapleGlobalsLike,
-    IPoolLibLike,
-    IPoolLike,
-    IStakeLockerLike
-} from "./interfaces/Interfaces.sol";
+import { IMapleGlobalsLike, IPoolLike } from "./interfaces/Interfaces.sol";
 
 
 contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
@@ -148,7 +135,7 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         // 5 BTC @ ~$58k = $290k = 29% collateralized, interest only
         uint256[3] memory requests = [uint256(5 * BTC), uint256(1_000_000 * USD), uint256(1_000_000 * USD)];  
 
-        uint256[4] memory fees = [uint256(0), uint256(0), uint256(0), uint256(0.05e18)];  // TODO: Set up fees for parity
+        uint256[4] memory fees = [uint256(0), uint256(0), uint256(0), uint256(0.05e18)]; 
 
         bytes memory arguments = loanInitializer.encodeArguments(address(borrower), assets, parameters, requests, fees);
 
@@ -184,6 +171,7 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         /*********************/
         /*** Drawdown Loan ***/
         /*********************/
+
         uint256 drawableFunds = fundAmount - establishmentFee * 2;
 
         erc20_mint(WBTC, 0, address(borrower), 5 * BTC);
@@ -206,9 +194,9 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(wbtc.balanceOf(address(loanV2)),   5 * BTC);
         assertEq(loanV2.collateral(),               5 * BTC);
         
-        // /********************************/
-        // /*** Make Payment 1 (On time) ***/
-        // /********************************/
+        /********************************/
+        /*** Make Payment 1 (On time) ***/
+        /********************************/
 
         hevm.warp(loanV2.nextPaymentDueDate());
 
@@ -243,6 +231,7 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         /************************************/
         /*** Claim Funds as Pool Delegate ***/
         /************************************/
+
         uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
@@ -273,8 +262,8 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         // Check details for upcoming payment #2
         ( principalPortion, interestPortion ) = loanV2.getNextPaymentBreakdown();
 
-        uint256 lateInterest = 1972_602739; // 1 day worth of interest + lateInterestPremium
-        uint256 lateFee = 50_000 * USD; // Rate for late payment over the principal
+        uint256 lateInterest = 1972_602739; // 1 day worth of interest at late premium interest rate
+        uint256 lateFee = 50_000 * USD;     // Rate for late payment over the principal
 
         assertEq(principalPortion, 0);
         assertEq(interestPortion,  9863_013698 + lateFee + lateInterest);  // Interest + 1972_602739
@@ -304,6 +293,7 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         /************************************/
         /*** Claim Funds as Pool Delegate ***/
         /************************************/
+
         details = pool.claim(address(loanV2), address(debtLockerFactory));
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
@@ -325,10 +315,9 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(usdc.balanceOf(ORTHOGONAL_PD),  usdc_poolDelegateBal    += ongoingFee);                        // 10% of interest
         assertEq(usdc.balanceOf(MAPLE_TREASURY), usdc_treasuryBal        += 0);
 
-
-        // /*****************************/
-        // /*** Make Payment 3 (Late) ***/
-        // /*****************************/
+        /*****************************/
+        /*** Make Payment 3 (Late) ***/
+        /*****************************/
 
         hevm.warp(loanV2.nextPaymentDueDate() + 2 days);
 
@@ -336,11 +325,11 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         ( principalPortion, interestPortion ) = loanV2.getNextPaymentBreakdown();
         uint256 totalPaid = principalPortion + interestPortion;
 
-        lateInterest = 3945_205479; // 2 day worth of interest + lateInterestPremium
-        lateFee = 50_000 * USD; // Rate for late payment over the principal
+        lateInterest = 3945_205479; // 2 days worth of interest at late premium interest rate
+        lateFee = 50_000 * USD;     // Rate for late payment over the principal
 
         assertEq(principalPortion, 1_000_000 * USD);
-        assertEq(interestPortion, 9863_013698  + lateInterest + lateFee);
+        assertEq(interestPortion,  9863_013698  + lateInterest + lateFee);
 
         // Make second payment
         erc20_mint(USDC, 9, address(borrower), totalPaid);  // Principal + interest
@@ -351,6 +340,7 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(loanV2.principal(),          1_000_000 * USD);
         assertEq(loanV2.paymentsRemaining(),  1);
 
+        // TODO to use approve and transferFrom in all integration tests
         borrower.erc20_transfer(USDC, address(loanV2), totalPaid);
         borrower.loan_makePayment(address(loanV2), 0);
 
@@ -389,6 +379,5 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(usdc.balanceOf(ORTHOGONAL_PD),  usdc_poolDelegateBal    += ongoingFee);                                           // 10% of interest
         assertEq(usdc.balanceOf(MAPLE_TREASURY), usdc_treasuryBal        += 0);
     }
-
 
 }
