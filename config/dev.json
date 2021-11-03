@@ -6,6 +6,9 @@
     },
     "contracts/test/PaymentsTest.t.sol": {
       "urls": ["contracts/test/PaymentsTest.t.sol"]
+    },
+    "contracts/test/UpgradeTest.t.sol": {
+      "urls": ["contracts/test/UpgradeTest.t.sol"]
     }
   },
   "settings": {

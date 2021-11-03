@@ -3,6 +3,9 @@
   "sources": {
     "contracts/test/ParityTest.t.sol": {
       "urls": ["contracts/test/ParityTest.t.sol"]
+    },
+    "contracts/test/UpgradeTest.t.sol": {
+      "urls": [ "contracts/test/UpgradeTest.t.sol"]
     }
   },
   "settings": {
