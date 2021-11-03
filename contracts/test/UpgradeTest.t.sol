@@ -5,16 +5,9 @@ import { IERC20 } from "../../modules/erc20/src/interfaces/IERC20.sol";
 
 import { TestUtils, StateManipulations } from "../../modules/contract-test-utils/contracts/test.sol";
 
-import { MapleProxyFactory } from "../../modules/debt-locker/modules/maple-proxy-factory/contracts/MapleProxyFactory.sol";  // TODO: Import MPF
-
 import { DebtLocker }            from "../../modules/debt-locker/contracts/DebtLocker.sol";
 import { DebtLockerFactory }     from "../../modules/debt-locker/contracts/DebtLockerFactory.sol";
 import { DebtLockerInitializer } from "../../modules/debt-locker/contracts/DebtLockerInitializer.sol";
-
-// import { Liquidator }        from "../../modules/liquidations/contracts/Liquidator.sol";
-// import { Rebalancer }        from "../../modules/liquidations/contracts/test/Liquidator.t.sol";
-// import { SushiswapStrategy } from "../../modules/liquidations/contracts/SushiswapStrategy.sol";
-// import { UniswapV2Strategy } from "../../modules/liquidations/contracts/UniswapV2Strategy.sol";
 
 import { IMapleLoan } from "../../modules/loan/contracts/interfaces/IMapleLoan.sol";
 
@@ -22,16 +15,9 @@ import { MapleLoan }            from "../../modules/loan/contracts/MapleLoan.sol
 import { MapleLoanFactory }     from "../../modules/loan/contracts/MapleLoanFactory.sol";
 import { MapleLoanInitializer } from "../../modules/loan/contracts/MapleLoanInitializer.sol";
 
-import {
-    ILoanV1Like,
-    IMapleGlobalsLike,
-    IPoolLibLike,
-    IPoolLike,
-    IStakeLockerLike
-} from "./interfaces/Interfaces.sol";
+import { IMapleGlobalsLike, IPoolLike } from "./interfaces/Interfaces.sol";
 
 import { Borrower }       from "./accounts/Borrower.sol";
-import { Keeper }         from "./accounts/Keeper.sol";
 import { GenericAccount } from "./accounts/GenericAccount.sol";
 
 import { AddressRegistry } from "../AddressRegistry.sol";
@@ -146,7 +132,7 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
         // 5 BTC @ ~$58k = $290k = 29% collateralized, interest only
         uint256[3] memory requests = [uint256(5 * BTC), uint256(1_000_000 * USD), uint256(1_000_000 * USD)];  
 
-        uint256[4] memory fees = [uint256(0), uint256(0), uint256(0), uint256(0)];  // TODO: Set up fees for parity
+        uint256[4] memory fees = [uint256(0), uint256(0), uint256(0), uint256(0)];
 
         bytes memory arguments = loanInitializer.encodeArguments(address(borrower), assets, parameters, requests, fees);
 
@@ -161,16 +147,16 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
 
         // Deploying and registering a new version
         address loanImplementation2 = address(new MapleLoan());
-        loanFactory.registerImplementation(2, address(loanImplementation2), address(debtLockerInitializer));
-        loanFactory.enableUpgradePath(1,2,address(0));
+        loanFactory.registerImplementation(2, address(loanImplementation2), address(loanInitializer));
+        loanFactory.enableUpgradePath(1, 2, address(0));
 
         assertEq(loanV2.implementation(), address(loanImplementation));
         assertEq(loanV2.factory(),        address(loanFactory));
 
         // Not borrower can't migrate
-        try notBorrower.loan_upgrade(address(loanV2),2, new bytes(0)) { assertTrue(false, "not borrower could upgrade"); } catch { }
+        try notBorrower.loan_upgrade(address(loanV2),2, new bytes(0)) { assertTrue(false, "Non-borrower could upgrade"); } catch { }
 
-        // Nothing change
+        // Nothing changes
         assertEq(loanV2.implementation(), address(loanImplementation));
         assertEq(loanV2.factory(),        address(loanFactory));
 
@@ -216,7 +202,7 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
         // Deploying and registering a new version
         address debtLockerV2 = address(new DebtLocker());
         debtLockerFactory.registerImplementation(2, address(debtLockerV2), address(debtLockerInitializer));
-        debtLockerFactory.enableUpgradePath(1,2,address(0));
+        debtLockerFactory.enableUpgradePath(1, 2, address(0));
 
         DebtLocker debtLocker = DebtLocker(loanV2.lender());
 
@@ -224,11 +210,11 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(debtLocker.factory(),        address(debtLockerFactory));
 
         // Not Governor can't update
-        GenericAccount acc = new GenericAccount();
+        GenericAccount account = new GenericAccount();
 
-        try 
-            acc.call(address(debtLocker), abi.encodeWithSelector(DebtLocker.upgrade.selector, 2, new bytes(0)))
-            { assertTrue(false, "generci account could upgrade");} catch { }
+        try account.call(address(debtLocker), abi.encodeWithSelector(DebtLocker.upgrade.selector, 2, new bytes(0))) { 
+            assertTrue(false, "Generic account could upgrade");
+        } catch { }
 
         assertEq(debtLocker.implementation(), address(debtLockerImplementation));
         assertEq(debtLocker.factory(),        address(debtLockerFactory));
@@ -239,4 +225,5 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(debtLocker.implementation(), address(debtLockerV2));
         assertEq(debtLocker.factory(),        address(debtLockerFactory));
     }
+
 }
