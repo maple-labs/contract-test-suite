@@ -120,21 +120,18 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
 
         address[2] memory assets = [WBTC, USDC];
 
-        uint256[6] memory parameters = [
+        uint256[3] memory termDetails = [
             uint256(10 days),  // 10 day grace period
             uint256(30 days),  // 30 day payment interval
-            uint256(3),        // 3 payments (90 day term)
-            uint256(0.12e18),  // 12% interest
-            uint256(0.04e18),  // 4% early repayment discount
-            uint256(0.6e18)    // 6% late fee premium
+            uint256(3)
         ];
 
         // 5 BTC @ ~$58k = $290k = 29% collateralized, interest only
         uint256[3] memory requests = [uint256(5 * BTC), uint256(1_000_000 * USD), uint256(1_000_000 * USD)];  
 
-        uint256[4] memory fees = [uint256(0), uint256(0), uint256(0), uint256(0)];
+        uint256[4] memory rates = [uint256(0.12e18), uint256(0), uint256(0), uint256(0.6e18)];
 
-        bytes memory arguments = loanInitializer.encodeArguments(address(borrower), assets, parameters, requests, fees);
+        bytes memory arguments = loanInitializer.encodeArguments(address(borrower), assets, termDetails, requests, rates);
 
         loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments));
     }
