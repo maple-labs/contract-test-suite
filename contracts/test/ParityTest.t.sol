@@ -12,7 +12,7 @@ import { DebtLockerFactory }     from "../../modules/debt-locker/contracts/DebtL
 import { DebtLockerInitializer } from "../../modules/debt-locker/contracts/DebtLockerInitializer.sol";
 
 import { Liquidator }        from "../../modules/liquidations/contracts/Liquidator.sol";
-import { Rebalancer }        from "../../modules/liquidations/contracts/test/Liquidator.t.sol";
+import { Rebalancer }        from "../../modules/liquidations/contracts/test/mocks/Mocks.sol";
 import { SushiswapStrategy } from "../../modules/liquidations/contracts/SushiswapStrategy.sol";
 import { UniswapV2Strategy } from "../../modules/liquidations/contracts/UniswapV2Strategy.sol";
 
@@ -147,7 +147,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         // 5 BTC @ ~$58k = $290k = 29% collateralized, interest only
         uint256[3] memory requests = [uint256(5 * BTC), uint256(1_000_000 * USD), uint256(1_000_000 * USD)];  
 
-        uint256[4] memory fees = [uint256(0), uint256(0), uint256(0), uint256(0)];  // TODO: Set up fees for parity
+        uint256[4] memory fees = [uint256(0), uint256(0), uint256(0), uint256(0)];
 
         bytes memory arguments = loanInitializer.encodeArguments(address(borrower), assets, parameters, requests, fees);
 
