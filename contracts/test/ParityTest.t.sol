@@ -858,4 +858,80 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(usdc.balanceOf(ORTHOGONAL_LL),  usdc_liquidityLockerBal + totalRecovered + swapOutAmount);  // Liquidation recovery + BPT recovery
     }
 
+    function test_overFund_claim() external {
+
+        /*********************/
+        /*** Deploy LoanV2 ***/
+        /*********************/
+
+        address[2] memory assets = [WBTC, USDC];
+
+        uint256[3] memory termDetails = [
+            uint256(10 days),  // 10 day grace period
+            uint256(30 days),  // 30 day payment interval
+            uint256(3)
+        ];
+
+        // 5 BTC @ ~$58k = $290k = 29% collateralized, interest only
+        uint256[3] memory requests = [uint256(5 * BTC), uint256(1_000_000 * USD), uint256(1_000_000 * USD)];  
+
+        uint256[4] memory rates = [uint256(0.12e18), uint256(0), uint256(0), uint256(0.6e18)];
+
+        bytes memory arguments = loanInitializer.encodeArguments(address(borrower), assets, termDetails, requests, rates);
+
+        loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments));
+
+        /**********************/
+        /*** Over-Fund Loan ***/
+        /**********************/
+
+        uint256 fundAmount       = 2_000_000 * USD;                           // fundAmount set to 2 * principalRequested
+        uint256 establishmentFee = 1_000_000 * USD * 25 * 90 / 365 / 10_000;  // Investor fee and treasury fee are both 25bps (based on 1m)
+
+        assertEq(pool_principalOut       = pool.principalOut(),            PRINCIPAL_OUT);
+        assertEq(pool_interestSum        = pool.interestSum(),             INTEREST_SUM);
+        assertEq(usdc_liquidityLockerBal = usdc.balanceOf(ORTHOGONAL_LL),  LL_USDC_BAL);
+        assertEq(usdc_stakeLockerBal     = usdc.balanceOf(ORTHOGONAL_SL),  SL_USDC_BAL);
+        assertEq(usdc_poolDelegateBal    = usdc.balanceOf(ORTHOGONAL_PD),  PD_USDC_BAL);
+        assertEq(usdc_treasuryBal        = usdc.balanceOf(MAPLE_TREASURY), TREASURY_USDC_BAL);
+        
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        
+        pool.fundLoan(address(loanV2), address(debtLockerFactory), fundAmount);
+
+        assertEq(pool.principalOut(),             pool_principalOut       += fundAmount);
+        assertEq(pool.interestSum(),              pool_interestSum        += 0);
+        assertEq(usdc.balanceOf(ORTHOGONAL_LL),   usdc_liquidityLockerBal -= fundAmount);
+        assertEq(usdc.balanceOf(ORTHOGONAL_SL),   usdc_stakeLockerBal     += 0);
+        assertEq(usdc.balanceOf(ORTHOGONAL_PD),   usdc_poolDelegateBal    += establishmentFee);  // Investor estab fee
+        assertEq(usdc.balanceOf(MAPLE_TREASURY),  usdc_treasuryBal        += establishmentFee);  // Treasury estab fee
+
+        assertEq(usdc.balanceOf(address(loanV2)), fundAmount - establishmentFee * 2);  // Remaining funds
+
+        /******************************************************************************************************/
+        /*** Claim Funds (Should get 1m back as principal, or this shouldn't be allowed in the first place) ***/
+        /******************************************************************************************************/
+
+        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+
+        assertEq(usdc.balanceOf(address(loanV2)), 1_000_000 * USD - establishmentFee * 2);  // Drawdown amount remains in loan
+
+        assertEq(details[0], 1_000_000 * USD);
+        assertEq(details[1], 1_000_000 * USD);
+        assertEq(details[2], 0);
+        assertEq(details[3], 0);
+        assertEq(details[4], 0);
+        assertEq(details[5], 0);
+        assertEq(details[6], 0);
+
+        uint256 ongoingFee = 1_000_000 * USD * 1000 / 10_000;  // Ongoing fees are charged on the principal and sent incorrectly to PD and SL
+
+        assertEq(pool.principalOut(),            pool_principalOut       += 0);
+        assertEq(pool.interestSum(),             pool_interestSum        += 1_000_000 * USD - 2 * ongoingFee);  // 80% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_LL),  usdc_liquidityLockerBal += 1_000_000 * USD - 2 * ongoingFee);  // 80% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_SL),  usdc_stakeLockerBal     += ongoingFee);                        // 10% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_PD),  usdc_poolDelegateBal    += ongoingFee);                        // 10% of interest
+        assertEq(usdc.balanceOf(MAPLE_TREASURY), usdc_treasuryBal        += 0);
+    }
+
 }
