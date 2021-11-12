@@ -203,9 +203,6 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(principalPortion, 0);
         assertEq(interestPortion,  9863_013698);
 
-        // Make first payment
-        erc20_mint(USDC, 9, address(borrower), interestPortion);
-
         assertEq(loanV2.drawableFunds(),      0);
         assertEq(loanV2.claimableFunds(),     0);
         assertEq(loanV2.nextPaymentDueDate(), start + 30 days);
@@ -214,6 +211,8 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
 
+        // Make first payment
+        erc20_mint(USDC, 9, address(borrower), interestPortion);
         borrower.erc20_transfer(USDC, address(loanV2), interestPortion);
         borrower.loan_makePayment(address(loanV2), 0);
 
@@ -265,9 +264,6 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(principalPortion, 0);
         assertEq(interestPortion,  9863_013698 + lateFee + lateInterest);  // Interest + 1972_602739
 
-        // Make second payment
-        erc20_mint(USDC, 9, address(borrower), interestPortion);
-
         assertEq(loanV2.drawableFunds(),      0);
         assertEq(loanV2.claimableFunds(),     0);                // Claim has been made
         assertEq(loanV2.nextPaymentDueDate(), start + 60 days);  // Payment 2 due date
@@ -276,6 +272,8 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
 
+        // Make second payment
+        erc20_mint(USDC, 9, address(borrower), interestPortion);
         borrower.erc20_transfer(USDC, address(loanV2), interestPortion);
         borrower.loan_makePayment(address(loanV2), 0);
 
@@ -328,9 +326,6 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(principalPortion, 1_000_000 * USD);
         assertEq(interestPortion,  9863_013698  + lateInterest + lateFee);
 
-        // Make second payment
-        erc20_mint(USDC, 9, address(borrower), totalPaid);  // Principal + interest
-
         assertEq(loanV2.drawableFunds(),      0);
         assertEq(loanV2.claimableFunds(),     0);
         assertEq(loanV2.nextPaymentDueDate(), start + 90 days);  // Payment 3 due date
@@ -338,12 +333,14 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(loanV2.paymentsRemaining(),  1);
 
         // TODO to use approve and transferFrom in all integration tests
+        // Make third payment
+        erc20_mint(USDC, 9, address(borrower), totalPaid);  // Principal + interest
         borrower.erc20_transfer(USDC, address(loanV2), totalPaid);
         borrower.loan_makePayment(address(loanV2), 0);
 
         assertEq(loanV2.drawableFunds(),      0);
         assertEq(loanV2.claimableFunds(),     1_000_000 * USD + interestPortion);
-        assertEq(loanV2.nextPaymentDueDate(), start + 120 days); 
+        assertEq(loanV2.nextPaymentDueDate(), 0); 
         assertEq(loanV2.principal(),          0);
         assertEq(loanV2.paymentsRemaining(),  0);
 
