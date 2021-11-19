@@ -119,7 +119,7 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
         refinancer = new Refinancer();
     }
 
-    function test_Refinance() external {
+    function test_refinance_multipleActions() external {
 
         /*********************/
         /*** Deploy LoanV2 ***/
@@ -142,10 +142,11 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
 
         loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments));
 
-        /*****************/
-        /*** Fund Loan ***/
-        /*****************/
         {
+            /*****************/
+            /*** Fund Loan ***/
+            /*****************/
+
             uint256 fundAmount       = 1_000_000 * USD;
             uint256 establishmentFee = fundAmount * 25 * 90 / 365 / 10_000;  // Investor fee and treasury fee are both 25bps
             
@@ -190,31 +191,6 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
 
         pool.claim(address(loanV2), address(debtLockerFactory));
 
-        /*****************************/
-        /*** Make Payment 2 (Late) ***/
-        /*****************************/
-
-        hevm.warp(loanV2.nextPaymentDueDate() + 1 days);  // 1 day late
-
-        // Check details for upcoming payment #2
-        ( principalPortion, interestPortion ) = loanV2.getNextPaymentBreakdown();
-
-        uint256 lateInterest = 1972_602739; // 1 day worth of interest at late premium interest rate
-        uint256 lateFee = 50_000 * USD;     // Rate for late payment over the principal
-
-        // Make second payment
-        erc20_mint(USDC, 9, address(borrower), interestPortion);
-
-        borrower.erc20_transfer(USDC, address(loanV2), interestPortion);
-        borrower.loan_makePayment(address(loanV2), 0);
-
-        /************************************/
-        /*** Claim Funds as Pool Delegate ***/
-        /************************************/
-
-        pool.claim(address(loanV2), address(debtLockerFactory));
-
-
         /*****************/
         /*** Refinance ***/
         /*****************/
@@ -227,8 +203,8 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
             uint256(3)
         ];
 
-        // 5 BTC @ ~$58k = $290k = 29% collateralized, interest only
-        uint256[3] memory refinanceRequests = [uint256(2 * BTC), uint256(2_000_000 * USD), uint256(2_000_000 * USD)];  
+        // 2 BTC @ ~$58k = $290k = 29% collateralized, partially amortized
+        uint256[3] memory refinanceRequests = [uint256(2 * BTC), uint256(2_000_000 * USD), uint256(1_000_000 * USD)];  
 
         uint256[4] memory refinanceRates = [uint256(0.10e18), uint256(0), uint256(0.04e18), uint256(0.4e18)];
 
@@ -249,11 +225,14 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
 
         borrower.loan_proposeNewTerms(address(loanV2), address(refinancer), data);
 
-        // Pool Delegate funds loan again for increasing amount
-        pool.fundLoan(address(loanV2), address(debtLockerFactory), principalIncrease);
-
         // Pool Delegate(address this) accepts new terms on Debt Locker
         DebtLocker debtLocker = DebtLocker(loanV2.lender());
+
+        // Fails if there're no extra funds from pool
+        try debtLocker.acceptNewTerms(address(refinancer), data, principalIncrease) { assertTrue(false, "shouldn't succeed"); } catch { }
+
+        // Pool Delegate funds loan again for increasing amount
+        pool.fundLoan(address(loanV2), address(debtLockerFactory), principalIncrease);
 
         debtLocker.acceptNewTerms(address(refinancer), data, principalIncrease);
         
@@ -268,6 +247,50 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(loanV2.interestRate(),        refinanceRates[0]);
         assertEq(loanV2.lateFeeRate(),         refinanceRates[2]);
         assertEq(loanV2.lateInterestPremium(), refinanceRates[3]);
+
+        /****************************/
+        /*** Make Another payment ***/
+        /****************************/
+
+        // Drawdown extra amount
+        borrower.loan_drawdownFunds(address(loanV2), principalIncrease, address(borrower));
+
+        hevm.warp(loanV2.nextPaymentDueDate());
+
+        // Check details for upcoming payment #1
+        (  principalPortion,  interestPortion ) = loanV2.getNextPaymentBreakdown();
+
+        // Principal is non-zero since the loan is now partially amortized
+        assertEq(principalPortion, 3292_57314375);
+        assertEq(interestPortion,  2465_7534246);
+
+        // Make first payment
+        erc20_mint(USDC, 9, address(borrower), interestPortion);
+
+        borrower.erc20_transfer(USDC, address(loanV2), interestPortion + principalPortion);
+        borrower.loan_makePayment(address(loanV2), 0);
+
+        assertEq(loanV2.drawableFunds(),      0);
+        assertEq(loanV2.claimableFunds(),     interestPortion + principalPortion);
+        assertEq(loanV2.nextPaymentDueDate(), block.timestamp + 45 days);
+        assertEq(loanV2.principal(),          2_000_000 * USD - principalPortion);
+        assertEq(loanV2.paymentsRemaining(),  2);
+
+        /************************************/
+        /*** Claim Funds as Pool Delegate ***/
+        /************************************/
+
+        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
+
+        assertEq(details[0], principalPortion + interestPortion);
+        assertEq(details[1], interestPortion);
+        assertEq(details[2], principalPortion);
+        assertEq(details[3], 0);
+        assertEq(details[4], 0);
+        assertEq(details[5], 0);
+        assertEq(details[6], 0);
 
     }
 
