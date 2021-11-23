@@ -203,7 +203,7 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
             uint256(3)
         ];
 
-        // 2 BTC @ ~$58k = $290k = 29% collateralized, partially amortized
+        // 2 BTC @ ~$58k = $116k = 11.6% collateralized, partially amortized
         uint256[3] memory refinanceRequests = [uint256(2 * BTC), uint256(2_000_000 * USD), uint256(1_000_000 * USD)];  
 
         uint256[4] memory refinanceRates = [uint256(0.10e18), uint256(0), uint256(0.04e18), uint256(0.4e18)];
