@@ -9,6 +9,11 @@
     },
     "contracts/test/UpgradeTest.t.sol": {
       "urls": ["contracts/test/UpgradeTest.t.sol"]
+    },
+    "contracts/test/RefinanceTest.t.sol": {
+      "urls": [
+        "contracts/test/RefinanceTest.t.sol"
+      ]
     }
   },
   "settings": {
