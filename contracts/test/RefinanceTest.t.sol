@@ -5,8 +5,6 @@ import { IERC20 } from "../../modules/erc20/src/interfaces/IERC20.sol";
 
 import { TestUtils, StateManipulations } from "../../modules/contract-test-utils/contracts/test.sol";
 
-import { MapleProxyFactory } from "../../modules/debt-locker/modules/maple-proxy-factory/contracts/MapleProxyFactory.sol";  // TODO: Import MPF
-
 import { DebtLocker }            from "../../modules/debt-locker/contracts/DebtLocker.sol";
 import { DebtLockerFactory }     from "../../modules/debt-locker/contracts/DebtLockerFactory.sol";
 import { DebtLockerInitializer } from "../../modules/debt-locker/contracts/DebtLockerInitializer.sol";
@@ -162,8 +160,7 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
 
             erc20_mint(WBTC, 0, address(borrower), 5 * BTC);
 
-            borrower.erc20_transfer(WBTC, address(loanV2), 5 * BTC);
-            borrower.loan_postCollateral(address(loanV2), 0);
+            borrower.erc20_approve(WBTC, address(loanV2), 5 * BTC);
             borrower.loan_drawdownFunds(address(loanV2), drawableFunds, address(borrower));
         }
         
@@ -182,8 +179,8 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
         // Make first payment
         erc20_mint(USDC, 9, address(borrower), interestPortion);
 
-        borrower.erc20_transfer(USDC, address(loanV2), interestPortion);
-        borrower.loan_makePayment(address(loanV2), 0);
+        borrower.erc20_approve(USDC, address(loanV2), interestPortion);
+        borrower.loan_makePayment(address(loanV2), interestPortion);
 
         /************************************/
         /*** Claim Funds as Pool Delegate ***/
@@ -267,8 +264,8 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
         // Make first payment
         erc20_mint(USDC, 9, address(borrower), interestPortion);
 
-        borrower.erc20_transfer(USDC, address(loanV2), interestPortion + principalPortion);
-        borrower.loan_makePayment(address(loanV2), 0);
+        borrower.erc20_approve(USDC, address(loanV2), interestPortion + principalPortion);
+        borrower.loan_makePayment(address(loanV2), interestPortion + principalPortion);
 
         assertEq(loanV2.drawableFunds(),      0);
         assertEq(loanV2.claimableFunds(),     interestPortion + principalPortion);

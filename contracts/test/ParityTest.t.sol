@@ -5,8 +5,6 @@ import { IERC20 } from "../../modules/erc20/src/interfaces/IERC20.sol";
 
 import { TestUtils, StateManipulations } from "../../modules/contract-test-utils/contracts/test.sol";
 
-import { MapleProxyFactory } from "../../modules/debt-locker/modules/maple-proxy-factory/contracts/MapleProxyFactory.sol";  // TODO: Import MPF
-
 import { DebtLocker }            from "../../modules/debt-locker/contracts/DebtLocker.sol";
 import { DebtLockerFactory }     from "../../modules/debt-locker/contracts/DebtLockerFactory.sol";
 import { DebtLockerInitializer } from "../../modules/debt-locker/contracts/DebtLockerInitializer.sol";
@@ -180,6 +178,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         /*********************/
         /*** Drawdown Loan ***/
         /*********************/
+
         uint256 drawableFunds = fundAmount - establishmentFee * 2;
 
         erc20_mint(WBTC, 0, address(borrower), 5 * BTC);
@@ -191,8 +190,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(wbtc.balanceOf(address(loanV2)),   0);
         assertEq(loanV2.collateral(),               0);
 
-        borrower.erc20_transfer(WBTC, address(loanV2), 5 * BTC);
-        borrower.loan_postCollateral(address(loanV2), 0);
+        borrower.erc20_approve(WBTC, address(loanV2), 5 * BTC);
         borrower.loan_drawdownFunds(address(loanV2), drawableFunds, address(borrower));
 
         assertEq(loanV2.drawableFunds(),            0);
@@ -224,8 +222,8 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
         // Make first payment
         erc20_mint(USDC, 9, address(borrower), interestPortion);
-        borrower.erc20_transfer(USDC, address(loanV2), interestPortion);
-        borrower.loan_makePayment(address(loanV2), 0);
+        borrower.erc20_approve(USDC, address(loanV2), interestPortion);
+        borrower.loan_makePayment(address(loanV2), interestPortion);
 
         assertEq(loanV2.drawableFunds(),      0);
         assertEq(loanV2.claimableFunds(),     interestPortion);
@@ -281,8 +279,8 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
         // Make second payment
         erc20_mint(USDC, 9, address(borrower), interestPortion);
-        borrower.erc20_transfer(USDC, address(loanV2), interestPortion);
-        borrower.loan_makePayment(address(loanV2), 0);
+        borrower.erc20_approve(USDC, address(loanV2), interestPortion);
+        borrower.loan_makePayment(address(loanV2), interestPortion);
 
         assertEq(loanV2.drawableFunds(),      0);
         assertEq(loanV2.claimableFunds(),     interestPortion);
@@ -314,8 +312,8 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
         // Make third payment
         erc20_mint(USDC, 9, address(borrower), 1_009_863_013698);  // Principal + interest
-        borrower.erc20_transfer(USDC, address(loanV2), 1_009_863_013698);
-        borrower.loan_makePayment(address(loanV2), 0);
+        borrower.erc20_approve(USDC, address(loanV2), 1_009_863_013698);
+        borrower.loan_makePayment(address(loanV2), 1_009_863_013698);
 
         assertEq(loanV2.drawableFunds(),      0);
         assertEq(loanV2.claimableFunds(),     1_000_000 * USD + interestPortion * 2);
@@ -393,8 +391,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
         erc20_mint(WBTC, 0, address(borrower), 25 * BTC);
 
-        borrower.erc20_transfer(WBTC, address(loanV2), 25 * BTC);
-        borrower.loan_postCollateral(address(loanV2), 0);
+        borrower.erc20_approve(WBTC, address(loanV2), 25 * BTC);
         borrower.loan_drawdownFunds(address(loanV2), drawableFunds, address(borrower));
         
         /********************************/
@@ -408,8 +405,8 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         // Make first payment
         erc20_mint(USDC, 9, address(borrower), interestPortion);
 
-        borrower.erc20_transfer(USDC, address(loanV2), interestPortion);
-        borrower.loan_makePayment(address(loanV2), 0);
+        borrower.erc20_approve(USDC, address(loanV2), interestPortion);
+        borrower.loan_makePayment(address(loanV2), interestPortion);
 
         /************************************/
         /*** Claim Funds as Pool Delegate ***/
@@ -429,8 +426,8 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         // Make second payment
         erc20_mint(USDC, 9, address(borrower), interestPortion);
 
-        borrower.erc20_transfer(USDC, address(loanV2), interestPortion);
-        borrower.loan_makePayment(address(loanV2), 0);
+        borrower.erc20_approve(USDC, address(loanV2), interestPortion);
+        borrower.loan_makePayment(address(loanV2), interestPortion);
 
         /*******************************/
         /*** Borrower Misses Payment ***/
@@ -650,8 +647,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
         erc20_mint(WBTC, 0, address(borrower), 250 * BTC);
 
-        borrower.erc20_transfer(WBTC, address(loanV2), 250 * BTC);
-        borrower.loan_postCollateral(address(loanV2), 0);
+        borrower.erc20_approve(WBTC, address(loanV2), 250 * BTC);
         borrower.loan_drawdownFunds(address(loanV2), drawableFunds, address(borrower));
         
         /********************************/
@@ -664,8 +660,8 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         ( , uint256 interestPortion ) = loanV2.getNextPaymentBreakdown();
         erc20_mint(USDC, 9, address(borrower), interestPortion);
 
-        borrower.erc20_transfer(USDC, address(loanV2), interestPortion);
-        borrower.loan_makePayment(address(loanV2), 0);
+        borrower.erc20_approve(USDC, address(loanV2), interestPortion);
+        borrower.loan_makePayment(address(loanV2), interestPortion);
 
         /************************************/
         /*** Claim Funds as Pool Delegate ***/
@@ -685,8 +681,8 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         // Make second payment
         erc20_mint(USDC, 9, address(borrower), interestPortion);
 
-        borrower.erc20_transfer(USDC, address(loanV2), interestPortion);
-        borrower.loan_makePayment(address(loanV2), 0);
+        borrower.erc20_approve(USDC, address(loanV2), interestPortion);
+        borrower.loan_makePayment(address(loanV2), interestPortion);
 
         /*******************************/
         /*** Borrower Misses Payment ***/

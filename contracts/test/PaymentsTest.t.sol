@@ -5,8 +5,6 @@ import { IERC20 } from "../../modules/erc20/src/interfaces/IERC20.sol";
 
 import { TestUtils, StateManipulations } from "../../modules/contract-test-utils/contracts/test.sol";
 
-import { MapleProxyFactory } from "../../modules/debt-locker/modules/maple-proxy-factory/contracts/MapleProxyFactory.sol";  // TODO: Import MPF
-
 import { DebtLocker }            from "../../modules/debt-locker/contracts/DebtLocker.sol";
 import { DebtLockerFactory }     from "../../modules/debt-locker/contracts/DebtLockerFactory.sol";
 import { DebtLockerInitializer } from "../../modules/debt-locker/contracts/DebtLockerInitializer.sol";
@@ -180,8 +178,7 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(wbtc.balanceOf(address(loanV2)),   0);
         assertEq(loanV2.collateral(),               0);
 
-        borrower.erc20_transfer(WBTC, address(loanV2), 5 * BTC);
-        borrower.loan_postCollateral(address(loanV2), 0);
+        borrower.erc20_approve(WBTC, address(loanV2), 5 * BTC);
         borrower.loan_drawdownFunds(address(loanV2), drawableFunds, address(borrower));
 
         assertEq(loanV2.drawableFunds(),            0);
@@ -213,8 +210,8 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
 
         // Make first payment
         erc20_mint(USDC, 9, address(borrower), interestPortion);
-        borrower.erc20_transfer(USDC, address(loanV2), interestPortion);
-        borrower.loan_makePayment(address(loanV2), 0);
+        borrower.erc20_approve(USDC, address(loanV2), interestPortion);
+        borrower.loan_makePayment(address(loanV2), interestPortion);
 
         assertEq(loanV2.drawableFunds(),      0);
         assertEq(loanV2.claimableFunds(),     interestPortion);
@@ -274,8 +271,8 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
 
         // Make second payment
         erc20_mint(USDC, 9, address(borrower), interestPortion);
-        borrower.erc20_transfer(USDC, address(loanV2), interestPortion);
-        borrower.loan_makePayment(address(loanV2), 0);
+        borrower.erc20_approve(USDC, address(loanV2), interestPortion);
+        borrower.loan_makePayment(address(loanV2), interestPortion);
 
         assertEq(loanV2.drawableFunds(),      0);
         assertEq(loanV2.claimableFunds(),     interestPortion);
@@ -332,11 +329,10 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(loanV2.principal(),          1_000_000 * USD);
         assertEq(loanV2.paymentsRemaining(),  1);
 
-        // TODO to use approve and transferFrom in all integration tests
         // Make third payment
         erc20_mint(USDC, 9, address(borrower), totalPaid);  // Principal + interest
-        borrower.erc20_transfer(USDC, address(loanV2), totalPaid);
-        borrower.loan_makePayment(address(loanV2), 0);
+        borrower.erc20_approve(USDC, address(loanV2), totalPaid);
+        borrower.loan_makePayment(address(loanV2), totalPaid);
 
         assertEq(loanV2.drawableFunds(),      0);
         assertEq(loanV2.claimableFunds(),     1_000_000 * USD + interestPortion);
@@ -391,7 +387,7 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         // 5 BTC @ ~$58k = $290k = 29% collateralized, interest only
         uint256[3] memory requests = [uint256(5 * BTC), uint256(1_000_000 * USD), uint256(1_000_000 * USD)];  
 
-        uint256[4] memory rates = [uint256(0.12e18), uint256(0.05e18), uint256(0.05e18), uint256(0.6e18)];  // TODO: Set up fees for parity
+        uint256[4] memory rates = [uint256(0.12e18), uint256(0.05e18), uint256(0.05e18), uint256(0.6e18)];
 
         bytes memory arguments = loanInitializer.encodeArguments(address(borrower), assets, termDetails, requests, rates);
 
@@ -439,8 +435,7 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(wbtc.balanceOf(address(loanV2)),   0);
         assertEq(loanV2.collateral(),               0);
 
-        borrower.erc20_transfer(WBTC, address(loanV2), 5 * BTC);
-        borrower.loan_postCollateral(address(loanV2), 0);
+        borrower.erc20_approve(WBTC, address(loanV2), 5 * BTC);
         borrower.loan_drawdownFunds(address(loanV2), drawableFunds, address(borrower));
 
         assertEq(loanV2.drawableFunds(),            0);
@@ -471,9 +466,8 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
 
-        // TODO use approve + transferFrom
-        borrower.erc20_transfer(USDC, address(loanV2), totalPayment);
-        borrower.loan_closeLoan(address(loanV2), 0);
+        borrower.erc20_approve(USDC, address(loanV2), totalPayment);
+        borrower.loan_closeLoan(address(loanV2), totalPayment);
 
         assertEq(loanV2.drawableFunds(),      0);
         assertEq(loanV2.claimableFunds(),     totalPayment);
