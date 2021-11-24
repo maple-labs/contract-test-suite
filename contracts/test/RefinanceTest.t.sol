@@ -258,11 +258,11 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
         hevm.warp(loanV2.nextPaymentDueDate());
 
         // Check details for upcoming payment #1
-        (  principalPortion,  interestPortion ) = loanV2.getNextPaymentBreakdown();
+        (  principalPortion, interestPortion ) = loanV2.getNextPaymentBreakdown();
 
         // Principal is non-zero since the loan is now partially amortized
-        assertEq(principalPortion, 3292_57314375);
-        assertEq(interestPortion,  2465_7534246);
+        assertEq(principalPortion, 329_257_314375);
+        assertEq(interestPortion,   24_657_534246);
 
         // Make first payment
         erc20_mint(USDC, 9, address(borrower), interestPortion);
