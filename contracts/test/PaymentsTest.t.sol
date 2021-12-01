@@ -83,6 +83,13 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
 
         borrower = new Borrower();
 
+        /*********************************************/
+        /*** Whitelist collateral and funds assets ***/
+        /*********************************************/
+
+        globals.setCollateralAsset(WBTC, true);
+        globals.setLiquidityAsset(USDC, true);
+
         /*************************************************************/
         /*** Deploy and set up new LoanFactory with implementation ***/
         /*************************************************************/
@@ -111,8 +118,7 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         debtLockerFactory.registerImplementation(1, address(debtLockerImplementation), address(debtLockerInitializer));
         debtLockerFactory.setDefaultVersion(1);
 
-        globals.setValidSubFactory(POOL_FACTORY, address(debtLockerFactory), true);  // Whitelist new debtLockerFactory
-        assertTrue(globals.isValidSubFactory(POOL_FACTORY, address(debtLockerFactory), 1));
+        globals.setValidSubFactory(POOL_FACTORY, address(debtLockerFactory), true);  // Whitelist new DebtLockerFactory
     }
 
     function test_latePayments() external {
@@ -136,7 +142,9 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
 
         bytes memory arguments = loanInitializer.encodeArguments(address(borrower), assets, termDetails, requests, rates);
 
-        loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments));
+        bytes32 salt = keccak256(abi.encodePacked("salt"));
+
+        loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments, salt));
 
         /*****************/
         /*** Fund Loan ***/
@@ -391,11 +399,13 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
         // 5 BTC @ ~$58k = $290k = 29% collateralized, interest only
         uint256[3] memory requests = [uint256(5 * BTC), uint256(1_000_000 * USD), uint256(1_000_000 * USD)];  
 
-        uint256[4] memory rates = [uint256(0.12e18), uint256(0.05e18), uint256(0.05e18), uint256(0.6e18)];  // TODO: Set up fees for parity
+        uint256[4] memory rates = [uint256(0.12e18), uint256(0.05e18), uint256(0.05e18), uint256(0.6e18)];
 
         bytes memory arguments = loanInitializer.encodeArguments(address(borrower), assets, termDetails, requests, rates);
 
-        loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments));
+        bytes32 salt = keccak256(abi.encodePacked("salt"));
+
+        loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments, salt));
 
         /*****************/
         /*** Fund Loan ***/

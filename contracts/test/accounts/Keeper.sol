@@ -13,6 +13,7 @@ contract Keeper {
         address strategy_, 
         address lender_, 
         uint256 swapAmount_,
+        uint256 maxReturnAmount_,
         address collateralAsset_,
         address middleAsset_,
         address fundsAsset_,
@@ -23,6 +24,7 @@ contract Keeper {
         IUniswapV2StyleStrategy(strategy_).flashBorrowLiquidation(
             lender_, 
             swapAmount_,
+            maxReturnAmount_,
             collateralAsset_,
             middleAsset_,
             fundsAsset_,
@@ -30,14 +32,15 @@ contract Keeper {
         );
     }
 
-    /************************/
+    /*********************/
     /*** Try Functions ***/
-    /************************/
+    /*********************/
 
     function try_strategy_flashBorrowLiquidation(
         address strategy_, 
         address lender_, 
         uint256 swapAmount_,
+        uint256 maxReturnAmount_,
         address collateralAsset_,
         address middleAsset_,
         address fundsAsset_,
@@ -50,6 +53,7 @@ contract Keeper {
                 IUniswapV2StyleStrategy.flashBorrowLiquidation.selector, 
                 lender_, 
                 swapAmount_,
+                maxReturnAmount_,
                 collateralAsset_,
                 middleAsset_,
                 fundsAsset_,

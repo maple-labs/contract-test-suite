@@ -85,6 +85,13 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
 
         borrower = new Borrower();
 
+        /*********************************************/
+        /*** Whitelist collateral and funds assets ***/
+        /*********************************************/
+
+        globals.setCollateralAsset(WBTC, true);
+        globals.setLiquidityAsset(USDC, true);
+
         /*************************************************************/
         /*** Deploy and set up new LoanFactory with implementation ***/
         /*************************************************************/
@@ -113,7 +120,7 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
         debtLockerFactory.registerImplementation(1, address(debtLockerImplementation), address(debtLockerInitializer));
         debtLockerFactory.setDefaultVersion(1);
 
-        globals.setValidSubFactory(POOL_FACTORY, address(debtLockerFactory), true);  // Whitelist new debtLockerFactory
+        globals.setValidSubFactory(POOL_FACTORY, address(debtLockerFactory), true);  // Whitelist new DebtLockerFactory
         assertTrue(globals.isValidSubFactory(POOL_FACTORY, address(debtLockerFactory), 1));
 
         refinancer = new Refinancer();
@@ -140,7 +147,9 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
 
         bytes memory arguments = loanInitializer.encodeArguments(address(borrower), assets, termDetails, requests, rates);
 
-        loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments));
+        bytes32 salt = keccak256(abi.encodePacked("salt"));
+
+        loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments, salt));
 
         {
             /*****************/
