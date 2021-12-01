@@ -13,6 +13,3 @@
 [submodule "modules/liquidations"]
 	path = modules/liquidations
 	url = https://github.com/maple-labs/liquidations
-[submodule "cache/cts-cache"]
-	path = cache/cts-cache
-	url = https://github.com/maple-labs/cts-cache
