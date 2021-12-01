@@ -32,6 +32,10 @@ interface IMapleGlobalsLike {
 
     function investorFee() external view returns (uint256 investorFee_);
 
+    function setCollateralAsset(address collateralAsset, bool valid) external;
+
+    function setLiquidityAsset(address liquidityAsst, bool valid) external;
+
     function setValidLoanFactory(address loanFactory, bool valid) external;
 
     function setValidSubFactory(address superFactory, address subFactory, bool valid) external;

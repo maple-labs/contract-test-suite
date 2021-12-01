@@ -93,6 +93,13 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
         borrower = new Borrower();
 
+        /*********************************************/
+        /*** Whitelist collateral and funds assets ***/
+        /*********************************************/
+
+        globals.setCollateralAsset(WBTC, true);
+        globals.setLiquidityAsset(USDC, true);
+
         /*************************************************************/
         /*** Deploy and set up new LoanFactory with implementation ***/
         /*************************************************************/
@@ -121,8 +128,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         debtLockerFactory.registerImplementation(1, address(debtLockerImplementation), address(debtLockerInitializer));
         debtLockerFactory.setDefaultVersion(1);
 
-        globals.setValidSubFactory(POOL_FACTORY, address(debtLockerFactory), true);  // Whitelist new debtLockerFactory
-        assertTrue(globals.isValidSubFactory(POOL_FACTORY, address(debtLockerFactory), 1));
+        globals.setValidSubFactory(POOL_FACTORY, address(debtLockerFactory), true);  // Whitelist new DebtLockerFactory
     }
 
     function test_endToEndLoan() external {
@@ -146,7 +152,9 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
         bytes memory arguments = loanInitializer.encodeArguments(address(borrower), assets, termDetails, requests, rates);
 
-        loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments));
+        bytes32 salt = keccak256(abi.encodePacked("salt"));
+
+        loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments, salt));
 
         /*****************/
         /*** Fund Loan ***/
@@ -372,7 +380,9 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
         bytes memory arguments = loanInitializer.encodeArguments(address(borrower), assets, termDetails, requests, rates);
 
-        loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments));
+        bytes32 salt = keccak256(abi.encodePacked("salt"));
+
+        loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments, salt));
 
         /*****************/
         /*** Fund Loan ***/
@@ -539,6 +549,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
                 address(sushiswapStrategy), 
                 address(debtLocker.liquidator()), 
                 10 * BTC, 
+                type(uint256).max,
                 WBTC, 
                 WETH, 
                 USDC, 
@@ -549,6 +560,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
                 address(uniswapV2Strategy), 
                 address(debtLocker.liquidator()), 
                 15 * BTC, 
+                type(uint256).max,
                 WBTC, 
                 WETH, 
                 USDC, 
@@ -622,7 +634,9 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
         bytes memory arguments = loanInitializer.encodeArguments(address(borrower), assets, termDetails, requests, rates);
 
-        loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments));
+        bytes32 salt = keccak256(abi.encodePacked("salt"));
+
+        loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments, salt));
 
         /*****************/
         /*** Fund Loan ***/
@@ -795,6 +809,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
                     address(sushiswapStrategy), 
                     address(debtLocker.liquidator()), 
                     10 * BTC, 
+                    type(uint256).max,
                     WBTC, 
                     WETH, 
                     USDC, 
@@ -807,6 +822,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
                     address(uniswapV2Strategy), 
                     address(debtLocker.liquidator()), 
                     15 * BTC, 
+                    type(uint256).max,
                     WBTC, 
                     WETH, 
                     USDC, 
