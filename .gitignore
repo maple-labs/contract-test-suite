@@ -4,4 +4,4 @@
 # DappTools
 hevm*
 /out
-cache/cts-cache
+/cache
