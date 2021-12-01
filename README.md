@@ -26,6 +26,8 @@ To improve testing performance, mainnet state is cached and added to a github re
 
 For all technical documentation related to the currently deployed Maple protocol, please refer to the maple-core GitHub [wiki](https://github.com/maple-labs/maple-core/wiki).
 
+For all technical documentation related to contracts currently in development, please refer to the LoanV2 GitHub [wiki](https://github.com/maple-labs/loan/wiki).
+
 ---
 
 <p align="center">
