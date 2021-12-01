@@ -83,6 +83,13 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
         borrower    = new Borrower();
         notBorrower = new Borrower();
 
+        /*********************************************/
+        /*** Whitelist collateral and funds assets ***/
+        /*********************************************/
+
+        globals.setCollateralAsset(WBTC, true);
+        globals.setLiquidityAsset(USDC, true);
+
         /*************************************************************/
         /*** Deploy and set up new LoanFactory with implementation ***/
         /*************************************************************/
@@ -133,7 +140,9 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
 
         bytes memory arguments = loanInitializer.encodeArguments(address(borrower), assets, termDetails, requests, rates);
 
-        loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments));
+        bytes32 salt = keccak256(abi.encodePacked("salt"));
+
+        loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments, salt));
     }
 
     function test_loanUpgrades() external {
