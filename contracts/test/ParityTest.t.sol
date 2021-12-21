@@ -470,7 +470,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         hevm.warp(loanV2.nextPaymentDueDate() + loanV2.gracePeriod() + 1);
 
         DebtLocker debtLocker = DebtLocker(pool.debtLockers(address(loanV2), address(debtLockerFactory)));
-        {
+
         // Loan State
         assertEq(loanV2.drawableFunds(),      0);     
         assertEq(loanV2.claimableFunds(),     0);    
@@ -511,7 +511,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(wbtc.balanceOf(address(loanV2)),                  0);
         assertEq(wbtc.balanceOf(address(debtLocker)),              0);
         assertEq(wbtc.balanceOf(address(debtLocker.liquidator())), 25 * BTC);
-        }
+
         /*******************************************************/
         /*** Pool Delegate configures liquidation parameters ***/
         /*******************************************************/
