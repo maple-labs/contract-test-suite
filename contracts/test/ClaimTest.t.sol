@@ -21,8 +21,6 @@ import { AddressRegistry } from "../AddressRegistry.sol";
 
 import { IMapleGlobalsLike, IPoolLike } from "./interfaces/Interfaces.sol";
 
-
-
 contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
     uint256 constant WAD = 10 ** 18;  // ETH  precision
@@ -69,7 +67,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
     MapleLoanFactory     loanFactory;
     MapleLoanInitializer loanInitializer;
 
-    function createLoan(uint256 principalRequested, uint256 endingPrincipal) internal {
+    function _createLoan(uint256 principalRequested, uint256 endingPrincipal) internal {
         address[2] memory assets = [WBTC, USDC];
 
         uint256[3] memory termDetails = [
@@ -90,60 +88,42 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments, salt));
     }
 
-    function fundLoan() internal {
+    function _fundLoan() internal {
         uint256 fundAmount       = 1_000_000 * USD;
         uint256 establishmentFee = fundAmount * 25 * 90 / 365 / 10_000;  // Investor fee and treasury fee are both 25bps
 
-        assertEq(pool_principalOut       = pool.principalOut(),            PRINCIPAL_OUT);
-        assertEq(pool_interestSum        = pool.interestSum(),             INTEREST_SUM);
-        assertEq(usdc_liquidityLockerBal = usdc.balanceOf(ORTHOGONAL_LL),  LL_USDC_BAL);
-        assertEq(usdc_stakeLockerBal     = usdc.balanceOf(ORTHOGONAL_SL),  SL_USDC_BAL);
-        assertEq(usdc_poolDelegateBal    = usdc.balanceOf(ORTHOGONAL_PD),  PD_USDC_BAL);
-        assertEq(usdc_treasuryBal        = usdc.balanceOf(MAPLE_TREASURY), TREASURY_USDC_BAL);
-        
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        pool_principalOut       = pool.principalOut();
+        pool_interestSum        = pool.interestSum();
+        usdc_liquidityLockerBal = usdc.balanceOf(ORTHOGONAL_LL);
+        usdc_stakeLockerBal     = usdc.balanceOf(ORTHOGONAL_SL);
+        usdc_poolDelegateBal    = usdc.balanceOf(ORTHOGONAL_PD);
+        usdc_treasuryBal        = usdc.balanceOf(MAPLE_TREASURY);
         
         pool.fundLoan(address(loanV2), address(debtLockerFactory), fundAmount);
 
-        assertEq(pool.principalOut(),             pool_principalOut       += fundAmount);
-        assertEq(pool.interestSum(),              pool_interestSum        += 0);
-        assertEq(usdc.balanceOf(ORTHOGONAL_LL),   usdc_liquidityLockerBal -= fundAmount);
-        assertEq(usdc.balanceOf(ORTHOGONAL_SL),   usdc_stakeLockerBal     += 0);
-        assertEq(usdc.balanceOf(ORTHOGONAL_PD),   usdc_poolDelegateBal    += establishmentFee);  // Investor estab fee
-        assertEq(usdc.balanceOf(MAPLE_TREASURY),  usdc_treasuryBal        += establishmentFee);  // Treasury estab fee
-
-        assertEq(usdc.balanceOf(address(loanV2)), fundAmount - establishmentFee * 2);  // Remaining funds
+        pool_principalOut       += fundAmount;
+        pool_interestSum        += 0;
+        usdc_liquidityLockerBal -= fundAmount;
+        usdc_stakeLockerBal     += 0;
+        usdc_poolDelegateBal    += establishmentFee;  // Investor estab fee
+        usdc_treasuryBal        += establishmentFee;  // Treasury estab fee
     }
 
-    function drawdownLoan() internal {
+    function _drawdownLoan() internal {
         uint256 fundAmount       = 1_000_000 * USD;
         uint256 establishmentFee = fundAmount * 25 * 90 / 365 / 10_000;  // Investor fee and treasury fee are both 25bps
         uint256 drawableFunds = fundAmount - establishmentFee * 2;
 
         erc20_mint(WBTC, 0, address(borrower), 5 * BTC);
 
-        assertEq(loanV2.drawableFunds(),            drawableFunds);
-        assertEq(usdc.balanceOf(address(loanV2)),   drawableFunds);
-        assertEq(usdc.balanceOf(address(borrower)), 0);
-        assertEq(wbtc.balanceOf(address(borrower)), 5 * BTC);
-        assertEq(wbtc.balanceOf(address(loanV2)),   0);
-        assertEq(loanV2.collateral(),               0);
-
         borrower.erc20_approve(WBTC, address(loanV2), 5 * BTC);
         borrower.loan_drawdownFunds(address(loanV2), drawableFunds, address(borrower));
-
-        assertEq(loanV2.drawableFunds(),            0);
-        assertEq(usdc.balanceOf(address(loanV2)),   0);
-        assertEq(usdc.balanceOf(address(borrower)), drawableFunds);
-        assertEq(wbtc.balanceOf(address(borrower)), 0);
-        assertEq(wbtc.balanceOf(address(loanV2)),   5 * BTC);
-        assertEq(loanV2.collateral(),               5 * BTC);
     }
 
-    function makeLoanPayments(uint256 payments, bool late) internal returns (uint256 totalPrincipal,uint256 totalInterest) {
+    function _makeLoanPayments(uint256 payments, bool late) internal returns (uint256 totalPrincipal,uint256 totalInterest) {
 
         for (uint256 i = 0; i < payments; i++) {
-            hevm.warp(loanV2.nextPaymentDueDate() - 1 + (late ? 3 days: 0));
+            hevm.warp(loanV2.nextPaymentDueDate() - 1 + (late ? 1 days: 0));
 
             // Check details for upcoming payment #1
             ( uint256 principalPortion, uint256 interestPortion ) = loanV2.getNextPaymentBreakdown();
@@ -160,14 +140,10 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
             erc20_mint(USDC, 9, address(borrower), totalPayment);
             borrower.erc20_approve(USDC, address(loanV2), totalPayment);
             borrower.loan_makePayment(address(loanV2), totalPayment);
-
-            assertEq(loanV2.claimableFunds(),     claimableFunds + totalPayment);
-            assertEq(loanV2.principal(),          principal - principalPortion);
-            assertEq(loanV2.paymentsRemaining(),  paymentsRemaining - 1);
         }
     }
 
-    function closeLoan() internal returns(uint256 principalPortion, uint256 feePortion) {
+    function _closeLoan() internal returns(uint256 principalPortion, uint256 feePortion) {
         hevm.warp(block.timestamp + 5 days);
 
         principalPortion = loanV2.principal();
@@ -178,25 +154,11 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         // Close loan, paying a flat fee on principal
         erc20_mint(USDC, 9, address(borrower), totalPayment);
 
-        assertEq(loanV2.drawableFunds(),      0);
-        assertEq(loanV2.claimableFunds(),     0);
-        assertEq(loanV2.nextPaymentDueDate(), start + 30 days);
-        assertEq(loanV2.principal(),          1_000_000 * USD);
-        assertEq(loanV2.paymentsRemaining(),  3);
-
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
-
         borrower.erc20_approve(USDC, address(loanV2), totalPayment);
         borrower.loan_closeLoan(address(loanV2), totalPayment);
-
-        assertEq(loanV2.drawableFunds(),      0);
-        assertEq(loanV2.claimableFunds(),     totalPayment);
-        assertEq(loanV2.nextPaymentDueDate(), 0); 
-        assertEq(loanV2.principal(),          0);
-        assertEq(loanV2.paymentsRemaining(),  0);
     }
 
-    function assertPoolState(uint256 principalPortion, uint256 interestPortion) internal {
+    function _assertPoolState( uint256 principalPortion, uint256 interestPortion ) internal {
         uint256 ongoingFee = interestPortion * 1000 / 10_000;  // Applies to both StakeLocker and Pool Delegate since both have 10% ongoing fees
 
         assertEq(pool.principalOut(),            pool_principalOut       -= principalPortion);
@@ -258,12 +220,12 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
     }
 
     function test_claim_onTimeInterestOnly() external {
-        createLoan(uint256(1_000_000 * USD), uint256(1_000_000 * USD));
-        fundLoan();
-        drawdownLoan();
+        _createLoan(uint256(1_000_000 * USD), uint256(1_000_000 * USD));
+        _fundLoan();
+        _drawdownLoan();
 
         // Make a single on time payment
-        (uint256 principalPortion, uint256 interestPortion) = makeLoanPayments(1,false);
+        ( uint256 principalPortion, uint256 interestPortion ) = _makeLoanPayments(1, false);
         uint256 totalPaid = principalPortion + interestPortion;
 
         uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
@@ -278,10 +240,10 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(details[5], 0);
         assertEq(details[6], 0);
 
-        assertPoolState(principalPortion, interestPortion);
+        _assertPoolState(principalPortion, interestPortion);
 
         // Make another payment
-        ( principalPortion, interestPortion ) = makeLoanPayments(1,false);
+        ( principalPortion, interestPortion ) = _makeLoanPayments(1, false);
         totalPaid = principalPortion + interestPortion;
 
         details = pool.claim(address(loanV2), address(debtLockerFactory));
@@ -296,10 +258,10 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(details[5], 0);
         assertEq(details[6], 0);
 
-        assertPoolState(principalPortion, interestPortion);
+        _assertPoolState(principalPortion, interestPortion);
 
         // Make last payment
-        ( principalPortion, interestPortion ) = makeLoanPayments(1,false);
+        ( principalPortion, interestPortion ) = _makeLoanPayments(1, false);
         totalPaid = principalPortion + interestPortion;
 
         details = pool.claim(address(loanV2), address(debtLockerFactory));
@@ -314,16 +276,16 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(details[5], 0);
         assertEq(details[6], 0);
 
-        assertPoolState(principalPortion, interestPortion);
+        _assertPoolState(principalPortion, interestPortion);
     }
 
     function test_claim_onTimeInterestOnlySingleClaim() external {
-        createLoan(uint256(1_000_000 * USD), uint256(1_000_000 * USD));
-        fundLoan();
-        drawdownLoan();
+        _createLoan(uint256(1_000_000 * USD), uint256(1_000_000 * USD));
+        _fundLoan();
+        _drawdownLoan();
 
         // Makeall three payments
-        (uint256 principalPortion, uint256 interestPortion) = makeLoanPayments(3,false);
+        ( uint256 principalPortion, uint256 interestPortion ) = _makeLoanPayments(3, false);
         uint256 totalPaid = principalPortion + interestPortion;
 
         uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
@@ -338,16 +300,16 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(details[5], 0);
         assertEq(details[6], 0);
 
-        assertPoolState(principalPortion, interestPortion);
+        _assertPoolState(principalPortion, interestPortion);
     }
 
     function test_claim_lateInterestOnlySingleClaim() external {
-        createLoan(uint256(1_000_000 * USD), uint256(1_000_000 * USD));
-        fundLoan();
-        drawdownLoan();
+        _createLoan(uint256(1_000_000 * USD), uint256(1_000_000 * USD));
+        _fundLoan();
+        _drawdownLoan();
 
         // Makeall three payments
-        (uint256 principalPortion, uint256 interestPortion) = makeLoanPayments(3,true);
+        ( uint256 principalPortion, uint256 interestPortion ) = _makeLoanPayments(3, true);
         uint256 totalPaid = principalPortion + interestPortion;
 
         uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
@@ -362,16 +324,16 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(details[5], 0);
         assertEq(details[6], 0);
 
-        assertPoolState(principalPortion, interestPortion);
+        _assertPoolState(principalPortion, interestPortion);
     }
 
     function test_claim_onTimePartiallyAmortized() external {
-        createLoan(uint256(1_000_000 * USD), uint256(500_000 * USD));
-        fundLoan();
-        drawdownLoan();
+        _createLoan(uint256(1_000_000 * USD), uint256(500_000 * USD));
+        _fundLoan();
+        _drawdownLoan();
 
         // Make a single on time payment
-        (uint256 principalPortion, uint256 interestPortion) = makeLoanPayments(1,false);
+        ( uint256 principalPortion, uint256 interestPortion ) = _makeLoanPayments(1, false);
         uint256 totalPaid = principalPortion + interestPortion;
 
         uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
@@ -386,10 +348,10 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(details[5], 0);
         assertEq(details[6], 0);
 
-        assertPoolState(principalPortion, interestPortion);
+        _assertPoolState(principalPortion, interestPortion);
 
         // Make another payment
-        ( principalPortion, interestPortion ) = makeLoanPayments(1,false);
+        ( principalPortion, interestPortion ) = _makeLoanPayments(1, false);
         totalPaid = principalPortion + interestPortion;
 
         details = pool.claim(address(loanV2), address(debtLockerFactory));
@@ -404,10 +366,10 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(details[5], 0);
         assertEq(details[6], 0);
 
-        assertPoolState(principalPortion, interestPortion);
+        _assertPoolState(principalPortion, interestPortion);
 
         // Make last payment
-        ( principalPortion, interestPortion ) = makeLoanPayments(1,false);
+        ( principalPortion, interestPortion ) = _makeLoanPayments(1, false);
         totalPaid = principalPortion + interestPortion;
 
         details = pool.claim(address(loanV2), address(debtLockerFactory));
@@ -422,16 +384,16 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(details[5], 0);
         assertEq(details[6], 0);
 
-        assertPoolState(principalPortion, interestPortion);
+        _assertPoolState(principalPortion, interestPortion);
     }
 
     function test_claim_onTimePartiallyAmortizedSingleClaim() external {
-        createLoan(uint256(1_000_000 * USD), uint256(500_000 * USD));
-        fundLoan();
-        drawdownLoan();
+        _createLoan(uint256(1_000_000 * USD), uint256(500_000 * USD));
+        _fundLoan();
+        _drawdownLoan();
 
         // Makeall three payments
-        (uint256 principalPortion, uint256 interestPortion) = makeLoanPayments(3,false);
+        ( uint256 principalPortion, uint256 interestPortion ) = _makeLoanPayments(3, false);
         uint256 totalPaid = principalPortion + interestPortion;
 
         uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
@@ -446,16 +408,16 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(details[5], 0);
         assertEq(details[6], 0);
 
-        assertPoolState(principalPortion, interestPortion);
+        _assertPoolState(principalPortion, interestPortion);
     }
 
     function test_claim_latePartiallyAmortizedSingleClaim() external {
-        createLoan(uint256(1_000_000 * USD), uint256(500_000 * USD));
-        fundLoan();
-        drawdownLoan();
+        _createLoan(uint256(1_000_000 * USD), uint256(500_000 * USD));
+        _fundLoan();
+        _drawdownLoan();
 
         // Makeall three payments
-        (uint256 principalPortion, uint256 interestPortion) = makeLoanPayments(3,true);
+        ( uint256 principalPortion, uint256 interestPortion ) = _makeLoanPayments(3, true);
         uint256 totalPaid = principalPortion + interestPortion;
 
         uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
@@ -470,16 +432,16 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(details[5], 0);
         assertEq(details[6], 0);
 
-        assertPoolState(principalPortion, interestPortion);
+        _assertPoolState(principalPortion, interestPortion);
     }
 
     function test_claim_onTimeFullyAmortized() external {
-        createLoan(uint256(1_000_000 * USD), uint256(0));
-        fundLoan();
-        drawdownLoan();
+        _createLoan(uint256(1_000_000 * USD), uint256(0));
+        _fundLoan();
+        _drawdownLoan();
 
         // Make a single on time payment
-        (uint256 principalPortion, uint256 interestPortion) = makeLoanPayments(1,false);
+        ( uint256 principalPortion, uint256 interestPortion ) = _makeLoanPayments(1, false);
         uint256 totalPaid = principalPortion + interestPortion;
 
         uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
@@ -494,10 +456,10 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(details[5], 0);
         assertEq(details[6], 0);
 
-        assertPoolState(principalPortion, interestPortion);
+        _assertPoolState(principalPortion, interestPortion);
 
         // Make another payment
-        ( principalPortion, interestPortion ) = makeLoanPayments(1,false);
+        ( principalPortion, interestPortion ) = _makeLoanPayments(1, false);
         totalPaid = principalPortion + interestPortion;
 
         details = pool.claim(address(loanV2), address(debtLockerFactory));
@@ -512,10 +474,10 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(details[5], 0);
         assertEq(details[6], 0);
 
-        assertPoolState(principalPortion, interestPortion);
+        _assertPoolState(principalPortion, interestPortion);
 
         // Make last payment
-        ( principalPortion, interestPortion ) = makeLoanPayments(1,false);
+        ( principalPortion, interestPortion ) = _makeLoanPayments(1, false);
         totalPaid = principalPortion + interestPortion;
 
         details = pool.claim(address(loanV2), address(debtLockerFactory));
@@ -530,16 +492,16 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(details[5], 0);
         assertEq(details[6], 0);
 
-        assertPoolState(principalPortion, interestPortion);
+        _assertPoolState(principalPortion, interestPortion);
     }
 
     function test_claim_onTimeFullyAmortizedSingleClaim() external {
-        createLoan(uint256(1_000_000 * USD), uint256(0));
-        fundLoan();
-        drawdownLoan();
+        _createLoan(uint256(1_000_000 * USD), uint256(0));
+        _fundLoan();
+        _drawdownLoan();
 
         // Makeall three payments
-        (uint256 principalPortion, uint256 interestPortion) = makeLoanPayments(3,false);
+        ( uint256 principalPortion, uint256 interestPortion ) = _makeLoanPayments(3, false);
         uint256 totalPaid = principalPortion + interestPortion;
 
         uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
@@ -554,16 +516,16 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(details[5], 0);
         assertEq(details[6], 0);
 
-        assertPoolState(principalPortion, interestPortion);
+        _assertPoolState(principalPortion, interestPortion);
     }
 
     function test_claim_lateFullyAmortizedSingleClaim() external {
-        createLoan(uint256(1_000_000 * USD), uint256(0));
-        fundLoan();
-        drawdownLoan();
+        _createLoan(uint256(1_000_000 * USD), uint256(0));
+        _fundLoan();
+        _drawdownLoan();
 
         // Makeall three payments
-        (uint256 principalPortion, uint256 interestPortion) = makeLoanPayments(3,false);
+        ( uint256 principalPortion, uint256 interestPortion ) = _makeLoanPayments(3, false);
         uint256 totalPaid = principalPortion + interestPortion;
 
         uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
@@ -578,15 +540,15 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(details[5], 0);
         assertEq(details[6], 0);
 
-        assertPoolState(principalPortion, interestPortion);
+        _assertPoolState(principalPortion, interestPortion);
     }
 
     function test_claim_closedLoan() external {
-        createLoan(uint256(1_000_000 * USD), uint256(0));
-        fundLoan();
-        drawdownLoan();
+        _createLoan(uint256(1_000_000 * USD), uint256(0));
+        _fundLoan();
+        _drawdownLoan();
 
-        (uint256 principalPortion, uint256 interestPortion) = closeLoan();
+        ( uint256 principalPortion, uint256 interestPortion ) = _closeLoan();
         uint256 totalPaid = principalPortion + interestPortion;
 
         uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
@@ -601,9 +563,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(details[5], 0);
         assertEq(details[6], 0);
 
-        assertPoolState(principalPortion, interestPortion);
+        _assertPoolState(principalPortion, interestPortion);
 
         // Fails to claim after loan is closed
-        try pool.claim(address(loanV2), address(debtLockerFactory)) { assertTrue(false, "able to claim"); } catch { }
+        try pool.claim(address(loanV2), address(debtLockerFactory)) { assertTrue(false, "Able to claim"); } catch { }
     }
 }
