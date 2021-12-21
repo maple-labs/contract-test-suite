@@ -36,9 +36,11 @@ import { AddressRegistry } from "../AddressRegistry.sol";
 
 contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
-    uint256 constant WAD = 10 ** 18;  // ETH  precision
-    uint256 constant BTC = 10 ** 8;   // WBTC precision
-    uint256 constant USD = 10 ** 6;   // USDC precision
+    uint256 constant WAD      = 10 ** 18;  // ETH  precision
+    uint256 constant BTC      = 10 ** 8;   // WBTC precision
+    uint256 constant USD      = 10 ** 6;   // USDC precision
+    uint256 constant ZERO     = uint256(0);
+    uint256 constant MAX_UINT = type(uint256).max;
 
     // Mainnet State Constants 
     // Block 13499527 - Wednesday, October 27, 2021 12:58:18 PM UTC
@@ -468,7 +470,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         hevm.warp(loanV2.nextPaymentDueDate() + loanV2.gracePeriod() + 1);
 
         DebtLocker debtLocker = DebtLocker(pool.debtLockers(address(loanV2), address(debtLockerFactory)));
-
+        {
         // Loan State
         assertEq(loanV2.drawableFunds(),      0);     
         assertEq(loanV2.claimableFunds(),     0);    
@@ -509,7 +511,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(wbtc.balanceOf(address(loanV2)),                  0);
         assertEq(wbtc.balanceOf(address(debtLocker)),              0);
         assertEq(wbtc.balanceOf(address(debtLocker.liquidator())), 25 * BTC);
-
+        }
         /*******************************************************/
         /*** Pool Delegate configures liquidation parameters ***/
         /*******************************************************/
@@ -550,6 +552,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
                 address(debtLocker.liquidator()), 
                 10 * BTC, 
                 type(uint256).max,
+                uint256(0),
                 WBTC, 
                 WETH, 
                 USDC, 
@@ -561,6 +564,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
                 address(debtLocker.liquidator()), 
                 15 * BTC, 
                 type(uint256).max,
+                uint256(0),
                 WBTC, 
                 WETH, 
                 USDC, 
@@ -613,6 +617,20 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(usdc.balanceOf(ORTHOGONAL_PD),  usdc_poolDelegateBal + ongoingFee);                            // Liquidation recovery + BPT recovery
     }
 
+    function liquidate(Keeper keeper, address strategy, DebtLocker debtLocker, uint256 amount) internal {
+        keeper.strategy_flashBorrowLiquidation(
+            strategy, 
+            address(debtLocker.liquidator()), 
+            amount, 
+            MAX_UINT,
+            ZERO,
+            WBTC, 
+            WETH, 
+            USDC, 
+            address(keeper)
+        );
+    } 
+
     function test_triggerDefault_underCollateralized() external {
 
         /*********************/
@@ -641,10 +659,10 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         /*****************/
         /*** Fund Loan ***/
         /*****************/
-
+        
         uint256 totalPrincipal   = 100_000_000 * USD;
         uint256 establishmentFee = totalPrincipal * 25 * 90 / 365 / 10_000;  // Investor fee and treasury fee are both 25bps
-
+        
         // Mint and deposit extra funds to raise liquidity locker balance
         pool.setLiquidityCap(pool.liquidityCap() + totalPrincipal);
         erc20_mint(USDC, 9, address(this), totalPrincipal);
@@ -663,7 +681,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
         borrower.erc20_approve(WBTC, address(loanV2), 250 * BTC);
         borrower.loan_drawdownFunds(address(loanV2), drawableFunds, address(borrower));
-        
+
         /********************************/
         /*** Make Payment 1 (On time) ***/
         /********************************/
@@ -792,7 +810,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
             Rebalancer rebalancer = new Rebalancer();
 
-            erc20_mint(USDC, 9, address(rebalancer), type(uint256).max);  // Mint "infinite" USDC into rebalancer for simulating arbitrage
+            erc20_mint(USDC, 9, address(rebalancer), MAX_UINT);  // Mint "infinite" USDC into rebalancer for simulating arbitrage
 
             assertEq(wbtc.balanceOf(address(liquidator)), 250 * BTC);
             assertEq(usdc.balanceOf(address(liquidator)), 0);
@@ -805,31 +823,13 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
             // Perform 10 liquidation swaps from each keeper, simulating arbitrage from the market after each trade
             for (uint256 i; i < 10; ++i) {
-                keeper1.strategy_flashBorrowLiquidation(
-                    address(sushiswapStrategy), 
-                    address(debtLocker.liquidator()), 
-                    10 * BTC, 
-                    type(uint256).max,
-                    WBTC, 
-                    WETH, 
-                    USDC, 
-                    address(keeper1)
-                );
+                liquidate(keeper1, address(sushiswapStrategy), debtLocker, 10 * BTC);
+   
+                rebalancer.swap(sushiswapStrategy.ROUTER(), 10 * BTC, MAX_UINT, USDC, WETH, WBTC);  // Perform fake arbitrage transaction to get price back up 
 
-                rebalancer.swap(sushiswapStrategy.ROUTER(), 10 * BTC, type(uint256).max, USDC, WETH, WBTC);  // Perform fake arbitrage transaction to get price back up 
-
-                keeper2.strategy_flashBorrowLiquidation(
-                    address(uniswapV2Strategy), 
-                    address(debtLocker.liquidator()), 
-                    15 * BTC, 
-                    type(uint256).max,
-                    WBTC, 
-                    WETH, 
-                    USDC, 
-                    address(keeper2)
-                );
-
-                rebalancer.swap(uniswapV2Strategy.ROUTER(), 15 * BTC, type(uint256).max, USDC, WETH, WBTC);  // Perform fake arbitrage transaction to get price back up 
+                liquidate(keeper2, address(uniswapV2Strategy), debtLocker, 15 * BTC);
+   
+                rebalancer.swap(uniswapV2Strategy.ROUTER(), 15 * BTC, MAX_UINT, USDC, WETH, WBTC);  // Perform fake arbitrage transaction to get price back up 
             }
         }
 
