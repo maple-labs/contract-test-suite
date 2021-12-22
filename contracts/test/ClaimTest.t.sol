@@ -103,13 +103,13 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         borrower.loan_drawdownFunds(address(loanV2), drawableFunds, address(borrower));
     }
 
-    function _makeLoanPayments(uint256 payments, bool late) internal returns (uint256 totalPrincipal,uint256 totalInterest) {
+    function _makeLoanPayments(uint256 payments, bool late) internal returns (uint256 totalPrincipal, uint256 totalInterest) {
 
         for (uint256 i = 0; i < payments; i++) {
             hevm.warp(loanV2.nextPaymentDueDate() - 1 + (late ? 1 days: 0));
 
             // Check details for upcoming payment #1
-            (uint256 principalPortion, uint256 interestPortion) = loanV2.getNextPaymentBreakdown();
+            ( uint256 principalPortion, uint256 interestPortion ) = loanV2.getNextPaymentBreakdown();
             uint256 totalPayment = principalPortion + interestPortion;
             
             totalPrincipal += principalPortion;
@@ -126,7 +126,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         hevm.warp(block.timestamp + 5 days);
 
         principalPortion = loanV2.principal();
-        feePortion       = principalPortion * loanV2.earlyFeeRate() * USD / uint256(10 ** 24); // 1% on the principal 
+        feePortion       = principalPortion * loanV2.earlyFeeRate() / WAD; // 1% on the principal 
         
         uint256 totalPayment = principalPortion + feePortion;
 
@@ -141,10 +141,10 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         uint256 ongoingFee = interestPortion * 1000 / 10_000;  // Applies to both StakeLocker and Pool Delegate since both have 10% ongoing fees
 
         assertEq(pool.principalOut(),            pool_principalOut       -= principalPortion);
-        assertEq(pool.interestSum(),             pool_interestSum        += interestPortion - 2 * ongoingFee);                      // 80% of interest
+        assertEq(pool.interestSum(),             pool_interestSum        += interestPortion - 2 * ongoingFee);                     // 80% of interest
         assertEq(usdc.balanceOf(ORTHOGONAL_LL),  usdc_liquidityLockerBal += principalPortion + interestPortion - 2 * ongoingFee);  // 80% of interest
-        assertEq(usdc.balanceOf(ORTHOGONAL_SL),  usdc_stakeLockerBal     += ongoingFee);                                             // 10% of interest
-        assertEq(usdc.balanceOf(ORTHOGONAL_PD),  usdc_poolDelegateBal    += ongoingFee);                                             // 10% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_SL),  usdc_stakeLockerBal     += ongoingFee);                                           // 10% of interest
+        assertEq(usdc.balanceOf(ORTHOGONAL_PD),  usdc_poolDelegateBal    += ongoingFee);                                           // 10% of interest
         assertEq(usdc.balanceOf(MAPLE_TREASURY), usdc_treasuryBal        += 0);
     }
 
@@ -210,8 +210,8 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);       
 
-        assertEq(details[0], 986_301_3698);
-        assertEq(details[1], 986_301_3698);
+        assertEq(details[0], 9_863_013698);
+        assertEq(details[1], 9_863_013698);
         assertEq(details[2], 0);
         assertEq(details[3], 0);
         assertEq(details[4], 0);
@@ -227,14 +227,14 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
 
-        assertEq(details[0], 986_301_3698);
-        assertEq(details[1], 986_301_3698);
-        assertEq(details[2], 0);
-        assertEq(details[3], 0);
-        assertEq(details[4], 0);
-        assertEq(details[5], 0);
-        assertEq(details[6], 0);
-
+        assertEq(details[0], 9863_013698);
+        assertEq(details[1], 9863_013698);
+        assertEq(details[2],           0);
+        assertEq(details[3],           0);
+        assertEq(details[4],           0);
+        assertEq(details[5],           0);
+        assertEq(details[6],           0);
+        
         _assertPoolState(principalPortion, interestPortion);
 
         // Make last payment
@@ -244,13 +244,13 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
 
-        assertEq(details[0], 1_009_863_013_698);
-        assertEq(details[1],      986_301_3698);
-        assertEq(details[2], 1_000_000_000_000);
-        assertEq(details[3],                 0);
-        assertEq(details[4],                 0);
-        assertEq(details[5],                 0);
-        assertEq(details[6],                 0);
+        assertEq(details[0], 1_009_863_013698);
+        assertEq(details[1],     9_863_013698);
+        assertEq(details[2], 1_000_000_000000);
+        assertEq(details[3],                0);
+        assertEq(details[4],                0);
+        assertEq(details[5],                0);
+        assertEq(details[6],                0);
 
         _assertPoolState(principalPortion, interestPortion);
     }
@@ -267,13 +267,13 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
 
-        assertEq(details[0], 1_029_589_041_094);
-        assertEq(details[1],    295_890_41_094);
-        assertEq(details[2], 1_000_000_000_000);
-        assertEq(details[3],                 0);
-        assertEq(details[4],                 0);
-        assertEq(details[5],                 0);
-        assertEq(details[6],                 0);
+        assertEq(details[0], 1_029_589_041094);
+        assertEq(details[1],    29_589_041094);
+        assertEq(details[2], 1_000_000_000000);
+        assertEq(details[3],                0);
+        assertEq(details[4],                0);
+        assertEq(details[5],                0);
+        assertEq(details[6],                0);
 
         _assertPoolState(principalPortion, interestPortion);
     }
@@ -290,13 +290,13 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
 
-        assertEq(details[0], 1_185_506_849_311);
-        assertEq(details[1],   185_506_849_311);
-        assertEq(details[2], 1_000_000_000_000);
-        assertEq(details[3],                 0);
-        assertEq(details[4],                 0);
-        assertEq(details[5],                 0);
-        assertEq(details[6],                 0);
+        assertEq(details[0], 1_185_506_849311);
+        assertEq(details[1],   185_506_849311);
+        assertEq(details[2], 1_000_000_000000);
+        assertEq(details[3],                0);
+        assertEq(details[4],                0);
+        assertEq(details[5],                0);
+        assertEq(details[6],                0);
 
         _assertPoolState(principalPortion, interestPortion);
     }
@@ -313,13 +313,13 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
 
-        assertEq(details[0], 174_896_600_402);
-        assertEq(details[1],   9_863_013_698);
-        assertEq(details[2], 165_033_586_704);
-        assertEq(details[3],               0);
-        assertEq(details[4],               0);
-        assertEq(details[5],               0);
-        assertEq(details[6],               0);
+        assertEq(details[0], 174_896_600402);
+        assertEq(details[1],   9_863_013698);
+        assertEq(details[2], 165_033_586704);
+        assertEq(details[3],              0);
+        assertEq(details[4],              0);
+        assertEq(details[5],              0);
+        assertEq(details[6],              0);
 
         _assertPoolState(principalPortion, interestPortion);
 
@@ -330,13 +330,13 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
 
-        assertEq(details[0], 174_896_600_402);
-        assertEq(details[1],   8_235_285_172);
-        assertEq(details[2], 166_661_315_230);
-        assertEq(details[3], 0);
-        assertEq(details[4], 0);
-        assertEq(details[5], 0);
-        assertEq(details[6], 0);
+        assertEq(details[0], 174_896_600402);
+        assertEq(details[1],   8_235_285172);
+        assertEq(details[2], 166_661_315230);
+        assertEq(details[3],              0);
+        assertEq(details[4],              0);
+        assertEq(details[5],              0);
+        assertEq(details[6],              0);
 
         _assertPoolState(principalPortion, interestPortion);
 
@@ -347,13 +347,13 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
 
-        assertEq(details[0], 674_896_600_403);
-        assertEq(details[1],   6_591_502_337);
-        assertEq(details[2], 668_305_098_066);
-        assertEq(details[3],               0);
-        assertEq(details[4],               0);
-        assertEq(details[5],               0);
-        assertEq(details[6],               0);
+        assertEq(details[0], 674_896_600403);
+        assertEq(details[1],   6_591_502337);
+        assertEq(details[2], 668_305_098066);
+        assertEq(details[3],              0);
+        assertEq(details[4],              0);
+        assertEq(details[5],              0);
+        assertEq(details[6],              0);
 
         _assertPoolState(principalPortion, interestPortion);
     }
@@ -370,13 +370,13 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
 
-        assertEq(details[0], 1_024_689_801_207);
-        assertEq(details[1],    24_689_801_207);
-        assertEq(details[2], 1_000_000_000_000);
-        assertEq(details[3],                 0);
-        assertEq(details[4],                 0);
-        assertEq(details[5],                 0);
-        assertEq(details[6],                 0);
+        assertEq(details[0], 1_024_689_801207);
+        assertEq(details[1],    24_689_801207);
+        assertEq(details[2], 1_000_000_000000);
+        assertEq(details[3],                0);
+        assertEq(details[4],                0);
+        assertEq(details[5],                0);
+        assertEq(details[6],                0);
 
         _assertPoolState(principalPortion, interestPortion);
     }
@@ -393,13 +393,13 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
 
-        assertEq(details[0], 1_154_791_337_014);
-        assertEq(details[1],   154_791_337_014);
-        assertEq(details[2], 1_000_000_000_000);
-        assertEq(details[3],                 0);
-        assertEq(details[4],                 0);
-        assertEq(details[5],                 0);
-        assertEq(details[6],                 0);
+        assertEq(details[0], 1_154_791_337014);
+        assertEq(details[1],   154_791_337014);
+        assertEq(details[2], 1_000_000_000000);
+        assertEq(details[3],                0);
+        assertEq(details[4],                0);
+        assertEq(details[5],                0);
+        assertEq(details[6],                0);
 
         _assertPoolState(principalPortion, interestPortion);
     }
@@ -416,13 +416,13 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
 
-        assertEq(details[0], 339_930_187_106);
-        assertEq(details[1],   9_863_013_698);
-        assertEq(details[2], 330_067_173_408);
-        assertEq(details[3],               0);
-        assertEq(details[4],               0);
-        assertEq(details[5],               0);
-        assertEq(details[6],               0);
+        assertEq(details[0], 339_930_187106);
+        assertEq(details[1],   9_863_013698);
+        assertEq(details[2], 330_067_173408);
+        assertEq(details[3],              0);
+        assertEq(details[4],              0);
+        assertEq(details[5],              0);
+        assertEq(details[6],              0);
 
         _assertPoolState(principalPortion, interestPortion);
 
@@ -433,13 +433,13 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
 
-        assertEq(details[0], 339_930_187_106);
-        assertEq(details[1],   6_607_556_645);
-        assertEq(details[2], 333_322_630_461);
-        assertEq(details[3],               0);
-        assertEq(details[4],               0);
-        assertEq(details[5],               0);
-        assertEq(details[6],               0);
+        assertEq(details[0], 339_930_187106);
+        assertEq(details[1],   6_607_556645);
+        assertEq(details[2], 333_322_630461);
+        assertEq(details[3],              0);
+        assertEq(details[4],              0);
+        assertEq(details[5],              0);
+        assertEq(details[6],              0);
 
         _assertPoolState(principalPortion, interestPortion);
 
@@ -450,13 +450,13 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
 
-        assertEq(details[0], 339_930_187_106);
-        assertEq(details[1],   3_319_990_975);
-        assertEq(details[2], 336_610_196_131);
-        assertEq(details[3],               0);
-        assertEq(details[4],               0);
-        assertEq(details[5],               0);
-        assertEq(details[6],               0);
+        assertEq(details[0], 339_930_187106);
+        assertEq(details[1],   3_319_990975);
+        assertEq(details[2], 336_610_196131);
+        assertEq(details[3],              0);
+        assertEq(details[4],              0);
+        assertEq(details[5],              0);
+        assertEq(details[6],              0);
 
         _assertPoolState(principalPortion, interestPortion);
     }
@@ -473,13 +473,13 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
 
-        assertEq(details[0], 1_019_790_561_318);
-        assertEq(details[1],    19_790_561_318);
-        assertEq(details[2], 1_000_000_000_000);
-        assertEq(details[3],                 0);
-        assertEq(details[4],                 0);
-        assertEq(details[5],                 0);
-        assertEq(details[6],                 0);
+        assertEq(details[0], 1_019_790_561318);
+        assertEq(details[1],    19_790_561318);
+        assertEq(details[2], 1_000_000_000000);
+        assertEq(details[3],                0);
+        assertEq(details[4],                0);
+        assertEq(details[5],                0);
+        assertEq(details[6],                0);
 
         _assertPoolState(principalPortion, interestPortion);
     }
@@ -496,13 +496,13 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
 
-        assertEq(details[0], 1_019_790_561_318);
-        assertEq(details[1],    19_790_561_318);
-        assertEq(details[2], 1_000_000_000_000);
-        assertEq(details[3],                 0);
-        assertEq(details[4],                 0);
-        assertEq(details[5],                 0);
-        assertEq(details[6],                 0);
+        assertEq(details[0], 1_019_790_561318);
+        assertEq(details[1],    19_790_561318);
+        assertEq(details[2], 1_000_000_000000);
+        assertEq(details[3],                0);
+        assertEq(details[4],                0);
+        assertEq(details[5],                0);
+        assertEq(details[6],                0);
 
         _assertPoolState(principalPortion, interestPortion);
     }
@@ -518,13 +518,13 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
     
-        assertEq(details[0], 1_010_000_000_000);
-        assertEq(details[1],    10_000_000_000);
-        assertEq(details[2], 1_000_000_000_000);
-        assertEq(details[3],                 0);
-        assertEq(details[4],                 0);
-        assertEq(details[5],                 0);
-        assertEq(details[6],                 0);
+        assertEq(details[0], 1_010_000_000000);
+        assertEq(details[1],    10_000_000000);
+        assertEq(details[2], 1_000_000_000000);
+        assertEq(details[3],                0);
+        assertEq(details[4],                0);
+        assertEq(details[5],                0);
+        assertEq(details[6],                0);
 
         _assertPoolState(principalPortion, interestPortion);
 
