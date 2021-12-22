@@ -1,11 +1,17 @@
 {
   "language": "Solidity",
   "sources": {
+    "contracts/test/ClaimTest.t.sol": {
+      "urls": ["contracts/test/ClaimTest.t.sol"]
+    },
     "contracts/test/ParityTest.t.sol": {
       "urls": ["contracts/test/ParityTest.t.sol"]
     },
     "contracts/test/UpgradeTest.t.sol": {
       "urls": [ "contracts/test/UpgradeTest.t.sol"]
+    },
+    "contracts/test/Payments.t.sol": {
+      "urls": ["contracts/test/Payments.t.sol"]
     }
   },
   "settings": {
