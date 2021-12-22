@@ -69,7 +69,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         // 5 BTC @ ~$58k = $290k = 29% collateralized, interest only
         uint256[3] memory requests = [uint256(5 * BTC), principalRequested, endingPrincipal];  
 
-        uint256[4] memory rates = [uint256(0.12e18), uint256(0.01e18), uint256(0.05e18), uint256(0.6e18)]; 
+        uint256[4] memory rates = [uint256(0.12e18), uint256(0.01e18), uint256(0.05e18), uint256(0.06e18)]; 
 
         bytes memory arguments = loanInitializer.encodeArguments(address(borrower), assets, termDetails, requests, rates);
 
@@ -268,7 +268,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         _fundLoan();
         _drawdownLoan();
 
-        // Makeall three payments
+        // Make all three payments
         ( uint256 principalPortion, uint256 interestPortion ) = _makeLoanPayments(3, false);
 
         assertEq(principalPortion, 1_000_000_000000);
@@ -294,11 +294,11 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         _fundLoan();
         _drawdownLoan();
 
-        // Makeall three payments
+        // Make all three payments
         ( uint256 principalPortion, uint256 interestPortion ) = _makeLoanPayments(3, true);
 
         assertEq(principalPortion, 1_000_000_000000);
-        assertEq(interestPortion,    191_424_657531);
+        assertEq(interestPortion,    182_547_945201);
 
         uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
 
@@ -386,7 +386,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         _fundLoan();
         _drawdownLoan();
 
-        // Makeall three payments
+        // Make all three payments
         ( uint256 principalPortion, uint256 interestPortion ) = _makeLoanPayments(3, false);
 
         assertEq(principalPortion, 1_000_000_000000);
@@ -412,11 +412,11 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         _fundLoan();
         _drawdownLoan();
 
-        // Makeall three payments
+        // Make all three payments
         ( uint256 principalPortion, uint256 interestPortion ) = _makeLoanPayments(3, true);
 
         assertEq(principalPortion, 1_000_000_000000);
-        assertEq(interestPortion,    159_729_297255);
+        assertEq(interestPortion,    152_322_356893);
 
         uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
 
@@ -504,7 +504,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         _fundLoan();
         _drawdownLoan();
 
-        // Makeall three payments
+        // Make all three payments
         ( uint256 principalPortion, uint256 interestPortion ) = _makeLoanPayments(3, false);
 
         assertEq(principalPortion, 1_000_000_000000);
@@ -530,11 +530,11 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         _fundLoan();
         _drawdownLoan();
 
-        // Makeall three payments
-        ( uint256 principalPortion, uint256 interestPortion ) = _makeLoanPayments(3, false);
+        // Make all three payments
+        ( uint256 principalPortion, uint256 interestPortion ) = _makeLoanPayments(3, true);
 
         assertEq(principalPortion, 1_000_000_000000);
-        assertEq(interestPortion,     19_790_561318);
+        assertEq(interestPortion,    122_096_768583);
 
         uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
 
