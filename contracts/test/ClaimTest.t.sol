@@ -82,7 +82,6 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
             uint256(3)
         ];
 
-        // 5 BTC @ ~$58k = $290k = 29% collateralized, interest only
         uint256[3] memory requests = [collateral, uint256(1_000_000 * USD), endingPrincipal];  
 
         uint256[4] memory rates = [uint256(0.12e18), uint256(0.01e18), uint256(0.05e18), uint256(0.06e18)]; 
@@ -242,6 +241,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
     function test_claim_onTimeInterestOnly() external {
         _createLoan(INTEREST_ONLY, UNDER_COLLATERALIZED);
+
         _fundLoan();
         _drawdownLoan();
 
