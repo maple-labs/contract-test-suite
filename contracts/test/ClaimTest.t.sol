@@ -633,8 +633,8 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         pool.triggerDefault(address(loanV2), address(debtLockerFactory));
         
         // Getting Variables before claim
-        bpt_stakeLockerBal      = bpt.balanceOf(ORTHOGONAL_SL);
-        pool_principalOut       = pool.principalOut();
+        bpt_stakeLockerBal = bpt.balanceOf(ORTHOGONAL_SL);
+        pool_principalOut  = pool.principalOut();
 
         IStakeLockerLike stakeLocker = IStakeLockerLike(ORTHOGONAL_SL);
 
@@ -655,6 +655,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(bpt.balanceOf(ORTHOGONAL_SL), bpt_stakeLockerBal - totalBptBurn);    // Max amount of BPTs were burned
         assertEq(pool.principalOut(),          pool_principalOut - 1_000_000_000000); // Principal out reduced by full amount
         assertEq(stakeLocker.bptLosses(),      totalBptBurn);                         // BPTs burned (zero before)
+        assertEq(pool.poolLosses(),            0); 
     }
 
     function test_claim_defaultCollateralized() external {
@@ -805,7 +806,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(details[5], 280_135_620000);
         assertEq(details[6], 719_864_380000);
 
-        assertEq(pool.principalOut(), pool_principalOut - 719_864_380000 - 280_135_620000); // Principal out reduced by full amount
+        assertEq(pool.principalOut(), pool_principalOut - 1_000_000_000000); // Principal out reduced by full amount
     }
 
     function test_claim_liquidationDOSPullFunds() external {
@@ -854,7 +855,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(details[5], 280_135_620000);
         assertEq(details[6], 719_864_380000);
 
-        assertEq(pool.principalOut(), pool_principalOut - 719_864_380000 - 280_135_620000); // Principal out reduced by full amount
+        assertEq(pool.principalOut(), pool_principalOut - 1_000_000_000000); // Principal out reduced by full amount
     }
 
     function test_claim_liquidationDOSStopLiquidation() external {
