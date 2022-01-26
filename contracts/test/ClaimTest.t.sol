@@ -9,6 +9,11 @@ import { DebtLocker }            from "../../modules/debt-locker/contracts/DebtL
 import { DebtLockerFactory }     from "../../modules/debt-locker/contracts/DebtLockerFactory.sol";
 import { DebtLockerInitializer } from "../../modules/debt-locker/contracts/DebtLockerInitializer.sol";
 
+import { Liquidator }        from "../../modules/liquidations/contracts/Liquidator.sol";
+import { Rebalancer }        from "../../modules/liquidations/contracts/test/mocks/Mocks.sol";
+import { SushiswapStrategy } from "../../modules/liquidations/contracts/SushiswapStrategy.sol";
+import { UniswapV2Strategy } from "../../modules/liquidations/contracts/UniswapV2Strategy.sol";
+
 import { IMapleLoan } from "../../modules/loan/contracts/interfaces/IMapleLoan.sol";
 
 import { MapleLoan }            from "../../modules/loan/contracts/MapleLoan.sol";
@@ -16,16 +21,23 @@ import { MapleLoanFactory }     from "../../modules/loan/contracts/MapleLoanFact
 import { MapleLoanInitializer } from "../../modules/loan/contracts/MapleLoanInitializer.sol";
 
 import { Borrower } from "./accounts/Borrower.sol";
+import { Keeper }   from "./accounts/Keeper.sol";
 
 import { AddressRegistry } from "../AddressRegistry.sol";
 
-import { IMapleGlobalsLike, IPoolLike } from "./interfaces/Interfaces.sol";
+import { IMapleGlobalsLike, IPoolLike, IPoolLibLike, IStakeLockerLike } from "./interfaces/Interfaces.sol";
 
 contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
     uint256 constant WAD = 10 ** 18;  // ETH  precision
     uint256 constant BTC = 10 ** 8;   // WBTC precision
     uint256 constant USD = 10 ** 6;   // USDC precision
+
+    uint8 constant INTEREST_ONLY        = 1;
+    uint8 constant PARTIALLY_AMORTIZED  = 2;
+    uint8 constant FULLY_AMORTIZED      = 3;
+    uint8 constant NOT_COLLATERALIZED   = 4;
+    uint8 constant UNDER_COLLATERALIZED = 5;
 
     uint256 start;
 
@@ -57,7 +69,11 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
     MapleLoanFactory     loanFactory;
     MapleLoanInitializer loanInitializer;
 
-    function _createLoan(uint256 principalRequested, uint256 endingPrincipal) internal {
+    function _createLoan(uint8 amortization, uint8 collateralization) internal {
+
+        uint256 endingPrincipal = amortization == INTEREST_ONLY ? uint256(1_000_000 * USD) : amortization == PARTIALLY_AMORTIZED ? uint256(500_000 * USD) : uint256(0);
+        uint256 collateral      = collateralization == NOT_COLLATERALIZED ? uint256(0) : uint256(5 * BTC);
+
         address[2] memory assets = [WBTC, USDC];
 
         uint256[3] memory termDetails = [
@@ -66,8 +82,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
             uint256(3)
         ];
 
-        // 5 BTC @ ~$58k = $290k = 29% collateralized, interest only
-        uint256[3] memory requests = [uint256(5 * BTC), principalRequested, endingPrincipal];  
+        uint256[3] memory requests = [collateral, uint256(1_000_000 * USD), endingPrincipal];  
 
         uint256[4] memory rates = [uint256(0.12e18), uint256(0.01e18), uint256(0.05e18), uint256(0.06e18)]; 
 
@@ -136,6 +151,33 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         borrower.loan_closeLoan(address(loanV2), totalPayment);
     }
 
+    function _liquidateCollateral() internal {
+        DebtLocker debtLocker = DebtLocker(pool.debtLockers(address(loanV2), address(debtLockerFactory)));
+
+        debtLocker.setAllowedSlippage(500);        // 5% slippage allowed
+        debtLocker.setMinRatio(40_000 * 10 ** 6);  // Minimum 40k USDC per WBTC (Market price is ~43k at block 13276702)
+
+        Keeper keeper1 = new Keeper();
+
+        SushiswapStrategy sushiswapStrategy = new SushiswapStrategy();
+
+        Rebalancer rebalancer = new Rebalancer();
+
+        erc20_mint(USDC, 9, address(rebalancer), type(uint256).max);  // Mint "infinite" USDC into rebalancer for simulating arbitrage
+
+        keeper1.strategy_flashBorrowLiquidation(
+            address(sushiswapStrategy), 
+            address(debtLocker.liquidator()), 
+            5 * BTC, 
+            type(uint256).max,
+            uint256(0),
+            WBTC, 
+            WETH, 
+            USDC, 
+            address(keeper1)
+        );
+    }
+
     function _assertPoolState(uint256 principalPortion, uint256 interestPortion) internal {
         uint256 ongoingFee = interestPortion * 1000 / 10_000;  // Applies to both StakeLocker and Pool Delegate since both have 10% ongoing fees
 
@@ -198,7 +240,8 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
     }
 
     function test_claim_onTimeInterestOnly() external {
-        _createLoan(uint256(1_000_000 * USD), uint256(1_000_000 * USD));
+        _createLoan(INTEREST_ONLY, UNDER_COLLATERALIZED);
+
         _fundLoan();
         _drawdownLoan();
 
@@ -264,7 +307,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
     }
 
     function test_claim_onTimeInterestOnlySingleClaim() external {
-        _createLoan(uint256(1_000_000 * USD), uint256(1_000_000 * USD));
+        _createLoan(INTEREST_ONLY, UNDER_COLLATERALIZED);
         _fundLoan();
         _drawdownLoan();
 
@@ -290,7 +333,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
     }
 
     function test_claim_lateInterestOnlySingleClaim() external {
-        _createLoan(uint256(1_000_000 * USD), uint256(1_000_000 * USD));
+        _createLoan(INTEREST_ONLY, UNDER_COLLATERALIZED);
         _fundLoan();
         _drawdownLoan();
 
@@ -316,7 +359,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
     }
 
     function test_claim_onTimePartiallyAmortized() external {
-        _createLoan(uint256(1_000_000 * USD), uint256(500_000 * USD));
+        _createLoan(PARTIALLY_AMORTIZED, UNDER_COLLATERALIZED);
         _fundLoan();
         _drawdownLoan();
 
@@ -382,7 +425,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
     }
 
     function test_claim_onTimePartiallyAmortizedSingleClaim() external {
-        _createLoan(uint256(1_000_000 * USD), uint256(500_000 * USD));
+        _createLoan(PARTIALLY_AMORTIZED, UNDER_COLLATERALIZED);
         _fundLoan();
         _drawdownLoan();
 
@@ -408,7 +451,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
     }
 
     function test_claim_latePartiallyAmortizedSingleClaim() external {
-        _createLoan(uint256(1_000_000 * USD), uint256(500_000 * USD));
+        _createLoan(PARTIALLY_AMORTIZED, UNDER_COLLATERALIZED);
         _fundLoan();
         _drawdownLoan();
 
@@ -434,7 +477,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
     }
 
     function test_claim_onTimeFullyAmortized() external {
-        _createLoan(uint256(1_000_000 * USD), uint256(0));
+        _createLoan(FULLY_AMORTIZED, UNDER_COLLATERALIZED);
         _fundLoan();
         _drawdownLoan();
 
@@ -500,7 +543,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
     }
 
     function test_claim_onTimeFullyAmortizedSingleClaim() external {
-        _createLoan(uint256(1_000_000 * USD), uint256(0));
+        _createLoan(FULLY_AMORTIZED, UNDER_COLLATERALIZED);
         _fundLoan();
         _drawdownLoan();
 
@@ -526,7 +569,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
     }
 
     function test_claim_lateFullyAmortizedSingleClaim() external {
-        _createLoan(uint256(1_000_000 * USD), uint256(0));
+        _createLoan(FULLY_AMORTIZED, UNDER_COLLATERALIZED);
         _fundLoan();
         _drawdownLoan();
 
@@ -552,7 +595,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
     }
 
     function test_claim_closedLoan() external {
-        _createLoan(uint256(1_000_000 * USD), uint256(0));
+        _createLoan(FULLY_AMORTIZED, UNDER_COLLATERALIZED);
         _fundLoan();
         _drawdownLoan();
 
@@ -577,5 +620,413 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         // Fails to claim after loan is closed
         try pool.claim(address(loanV2), address(debtLockerFactory)) { assertTrue(false, "Able to claim"); } catch { }
+    }
+
+    function test_claim_defaultUncollateralized() external {
+        _createLoan(INTEREST_ONLY, NOT_COLLATERALIZED); // Zero collateral required
+        _fundLoan();
+        _drawdownLoan();
+
+        // Put in default
+        hevm.warp(block.timestamp + loanV2.nextPaymentDueDate() + loanV2.gracePeriod() + 1);
+
+        pool.triggerDefault(address(loanV2), address(debtLockerFactory));
+        
+        // Getting Variables before claim
+        bpt_stakeLockerBal = bpt.balanceOf(ORTHOGONAL_SL);
+        pool_principalOut  = pool.principalOut();
+
+        IStakeLockerLike stakeLocker = IStakeLockerLike(ORTHOGONAL_SL);
+
+        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
+
+        assertEq(details[0], 0);
+        assertEq(details[1], 0);
+        assertEq(details[2], 0);
+        assertEq(details[3], 0);
+        assertEq(details[4], 0);
+        assertEq(details[5], 0);
+        assertEq(details[6], 1_000_000_000000);
+
+        uint256 totalBptBurn = 7_1214039087332046011;   
+
+        assertEq(bpt.balanceOf(ORTHOGONAL_SL), bpt_stakeLockerBal - totalBptBurn);    // Max amount of BPTs were burned
+        assertEq(pool.principalOut(),          pool_principalOut - 1_000_000_000000); // Principal out reduced by full amount
+        assertEq(stakeLocker.bptLosses(),      totalBptBurn);                         // BPTs burned (zero before)
+        assertEq(pool.poolLosses(),            0); 
+    }
+
+    function test_claim_defaultCollateralized() external {
+        _createLoan(INTEREST_ONLY, UNDER_COLLATERALIZED); // Zero collateral required
+        _fundLoan();
+        _drawdownLoan();
+
+        // Put in default
+        hevm.warp(block.timestamp + loanV2.nextPaymentDueDate() + loanV2.gracePeriod() + 1);
+
+        pool.triggerDefault(address(loanV2), address(debtLockerFactory));
+
+        try pool.claim(address(loanV2), address(debtLockerFactory)) { 
+            assertTrue(false, "Claim before liquidation is done"); 
+        } catch Error(string memory reason) {
+            assertEq(reason, "DL:HCOR:LIQ_NOT_FINISHED");
+        }
+
+        // Getting Variables before claim
+        bpt_stakeLockerBal      = bpt.balanceOf(ORTHOGONAL_SL);
+        pool_principalOut       = pool.principalOut();
+
+        IStakeLockerLike stakeLocker = IStakeLockerLike(ORTHOGONAL_SL);
+
+        _liquidateCollateral();
+
+        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
+
+        assertEq(details[0], 280_135_620000);
+        assertEq(details[1], 0);
+        assertEq(details[2], 0);
+        assertEq(details[3], 0);
+        assertEq(details[4], 0);
+        assertEq(details[5], 280_135_620000);
+        assertEq(details[6], 719_864_380000);
+
+        uint256 totalBptBurn = 5_0843816168726907475;   
+
+        assertEq(bpt.balanceOf(ORTHOGONAL_SL), bpt_stakeLockerBal - totalBptBurn);                   // Max amount of BPTs were burned
+        assertEq(pool.principalOut(),          pool_principalOut - 719_864_380000 - 280_135_620000); // Principal out reduced by full amount
+        assertEq(stakeLocker.bptLosses(),      totalBptBurn);                                        // BPTs burned (zero before)
+    }
+
+    function test_claim_defaultUncollateralizedWithClaim() external {
+        _createLoan(INTEREST_ONLY, NOT_COLLATERALIZED); // Zero collateral required
+        _fundLoan();
+        _drawdownLoan();
+
+        ( uint256 principalPortion, uint256 interestPortion ) = _makeLoanPayments(1, false);
+
+        assertEq(principalPortion, 0);
+        assertEq(interestPortion,  9_863_013698);
+
+        // Put in default
+        hevm.warp(block.timestamp + loanV2.nextPaymentDueDate() + loanV2.gracePeriod() + 1);
+
+        try pool.triggerDefault(address(loanV2), address(debtLockerFactory)) { 
+            assertTrue(false, "Trigger default before claim"); 
+        } catch Error(string memory reason) {
+            assertEq(reason, "DL:TD:NEED_TO_CLAIM");
+        }
+
+        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
+
+        assertEq(details[0], principalPortion + interestPortion);
+        assertEq(details[1], interestPortion);
+        assertEq(details[2], principalPortion);
+        assertEq(details[3], 0);
+        assertEq(details[4], 0);
+        assertEq(details[5], 0);
+        assertEq(details[6], 0);
+
+        _assertPoolState(principalPortion, interestPortion);
+
+        pool.triggerDefault(address(loanV2), address(debtLockerFactory));
+
+        details = pool.claim(address(loanV2), address(debtLockerFactory));
+
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
+
+        assertEq(details[0], 0);
+        assertEq(details[1], 0);
+        assertEq(details[2], 0);
+        assertEq(details[3], 0);
+        assertEq(details[4], 0);
+        assertEq(details[5], 0);
+        assertEq(details[6], 1_000_000_000000);
+
+        assertEq(pool.principalOut(), pool_principalOut - 1_000_000_000000); // Principal out reduced by full amount
+    }
+
+    function test_claim_defaultCollateralizedWithClaim() external {
+        _createLoan(INTEREST_ONLY, UNDER_COLLATERALIZED);
+        _fundLoan();
+        _drawdownLoan();
+
+        ( uint256 principalPortion, uint256 interestPortion ) = _makeLoanPayments(1, false);
+
+        assertEq(principalPortion, 0);
+        assertEq(interestPortion,  9_863_013698);
+
+        // Put in default
+        hevm.warp(block.timestamp + loanV2.nextPaymentDueDate() + loanV2.gracePeriod() + 1);
+
+        try pool.triggerDefault(address(loanV2), address(debtLockerFactory)) { 
+            assertTrue(false, "Trigger default before claim"); 
+        } catch Error(string memory reason) {
+            assertEq(reason, "DL:TD:NEED_TO_CLAIM");
+        }
+
+        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
+
+        assertEq(details[0], principalPortion + interestPortion);
+        assertEq(details[1], interestPortion);
+        assertEq(details[2], principalPortion);
+        assertEq(details[3], 0);
+        assertEq(details[4], 0);
+        assertEq(details[5], 0);
+        assertEq(details[6], 0);
+
+        _assertPoolState(principalPortion, interestPortion);
+
+        pool.triggerDefault(address(loanV2), address(debtLockerFactory));
+
+        try pool.claim(address(loanV2), address(debtLockerFactory)) { 
+            assertTrue(false, "Claim before liquidation is done"); 
+        } catch Error(string memory reason) {
+            assertEq(reason, "DL:HCOR:LIQ_NOT_FINISHED");
+        }
+
+        _liquidateCollateral();
+
+        details = pool.claim(address(loanV2), address(debtLockerFactory));
+
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
+
+        assertEq(details[0], 280_135_620000);
+        assertEq(details[1], 0);
+        assertEq(details[2], 0);
+        assertEq(details[3], 0);
+        assertEq(details[4], 0);
+        assertEq(details[5], 280_135_620000);
+        assertEq(details[6], 719_864_380000);
+
+        assertEq(pool.principalOut(), pool_principalOut - 1_000_000_000000); // Principal out reduced by full amount
+    }
+
+    function test_claim_liquidationDOSPullFunds() external {
+        _createLoan(INTEREST_ONLY, UNDER_COLLATERALIZED);
+        _fundLoan();
+        _drawdownLoan();
+
+         // Put in default
+        hevm.warp(block.timestamp + loanV2.nextPaymentDueDate() + loanV2.gracePeriod() + 1);
+
+        pool.triggerDefault(address(loanV2), address(debtLockerFactory));
+
+        try pool.claim(address(loanV2), address(debtLockerFactory)) { 
+            assertTrue(false, "Claim before liquidation is done"); 
+        } catch Error(string memory reason) {
+            assertEq(reason, "DL:HCOR:LIQ_NOT_FINISHED");
+        }
+
+        _liquidateCollateral();
+
+        // Malicious entity will send 1 WEI work of collateral to Liquidator
+        DebtLocker debtLocker =  DebtLocker(pool.debtLockers(address(loanV2), address(debtLockerFactory)));
+
+        address liquidator = debtLocker.liquidator();
+        
+        erc20_mint(WBTC, 0, liquidator, 1);
+
+        // Claiming is locked again
+        try pool.claim(address(loanV2), address(debtLockerFactory)) { 
+            assertTrue(false, "Claim before liquidation is done"); 
+        } catch Error(string memory reason) {
+            assertEq(reason, "DL:HCOR:LIQ_NOT_FINISHED");
+        }
+
+        debtLocker.pullFundsFromLiquidator(address(liquidator), WBTC, address(this), 1);
+
+        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
+
+        assertEq(details[0], 280_135_620000);
+        assertEq(details[1], 0);
+        assertEq(details[2], 0);
+        assertEq(details[3], 0);
+        assertEq(details[4], 0);
+        assertEq(details[5], 280_135_620000);
+        assertEq(details[6], 719_864_380000);
+
+        assertEq(pool.principalOut(), pool_principalOut - 1_000_000_000000); // Principal out reduced by full amount
+    }
+
+    function test_claim_liquidationDOSStopLiquidation() external {
+        _createLoan(INTEREST_ONLY, UNDER_COLLATERALIZED);
+        _fundLoan();
+        _drawdownLoan();
+
+         // Put in default
+        hevm.warp(block.timestamp + loanV2.nextPaymentDueDate() + loanV2.gracePeriod() + 1);
+
+        pool.triggerDefault(address(loanV2), address(debtLockerFactory));
+
+        try pool.claim(address(loanV2), address(debtLockerFactory)) { 
+            assertTrue(false, "Claim before liquidation is done"); 
+        } catch Error(string memory reason) {
+            assertEq(reason, "DL:HCOR:LIQ_NOT_FINISHED");
+        }
+
+        _liquidateCollateral();
+
+        // Malicious entity will send 1 WEI work of collateral to Liquidator
+        DebtLocker debtLocker =  DebtLocker(pool.debtLockers(address(loanV2), address(debtLockerFactory)));
+
+        address liquidator = debtLocker.liquidator();
+        
+        erc20_mint(WBTC, 0, liquidator, 1);
+
+        // Claiming is locked again
+        try pool.claim(address(loanV2), address(debtLockerFactory)) { 
+            assertTrue(false, "Claim before liquidation is done"); 
+        } catch Error(string memory reason) {
+            assertEq(reason, "DL:HCOR:LIQ_NOT_FINISHED");
+        }
+
+        debtLocker.stopLiquidation();
+
+        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
+
+        assertEq(details[0], 280_135_620000);
+        assertEq(details[1], 0);
+        assertEq(details[2], 0);
+        assertEq(details[3], 0);
+        assertEq(details[4], 0);
+        assertEq(details[5], 280_135_620000);
+        assertEq(details[6], 719_864_380000);
+
+        assertEq(pool.principalOut(), pool_principalOut - 719_864_380000 - 280_135_620000); // Principal out reduced by full amount
+    }
+
+    function test_claim_liquidatonStop() external {
+        _createLoan(INTEREST_ONLY, UNDER_COLLATERALIZED);
+        _fundLoan();
+        _drawdownLoan();
+
+         // Put in default
+        hevm.warp(block.timestamp + loanV2.nextPaymentDueDate() + loanV2.gracePeriod() + 1);
+
+        pool.triggerDefault(address(loanV2), address(debtLockerFactory));
+
+        try pool.claim(address(loanV2), address(debtLockerFactory)) { 
+            assertTrue(false, "Claim before liquidation is done"); 
+        } catch Error(string memory reason) {
+            assertEq(reason, "DL:HCOR:LIQ_NOT_FINISHED");
+        }
+
+        // Instead of liquidating, the Pool Delegate will prematurely stop the liquidation and take a loss
+        DebtLocker debtLocker =  DebtLocker(pool.debtLockers(address(loanV2), address(debtLockerFactory)));
+
+        debtLocker.stopLiquidation();
+
+        // Now claiming is possible
+        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
+
+        assertEq(details[0], 0);
+        assertEq(details[1], 0);
+        assertEq(details[2], 0);
+        assertEq(details[3], 0);
+        assertEq(details[4], 0);
+        assertEq(details[5], 0);
+        assertEq(details[6], 1_000_000_000000);   
+
+        assertEq(pool.principalOut(), pool_principalOut - 1_000_000_000000);     
+    }
+
+    function test_claim_liquidatonStopAndClaim() external {
+        _createLoan(INTEREST_ONLY, UNDER_COLLATERALIZED);
+        _fundLoan();
+        _drawdownLoan();
+
+         // Put in default
+        hevm.warp(block.timestamp + loanV2.nextPaymentDueDate() + loanV2.gracePeriod() + 1);
+
+        pool.triggerDefault(address(loanV2), address(debtLockerFactory));
+
+        try pool.claim(address(loanV2), address(debtLockerFactory)) { 
+            assertTrue(false, "Claim before liquidation is done"); 
+        } catch Error(string memory reason) {
+            assertEq(reason, "DL:HCOR:LIQ_NOT_FINISHED");
+        }
+
+        _liquidateCollateral();
+
+        DebtLocker debtLocker =  DebtLocker(pool.debtLockers(address(loanV2), address(debtLockerFactory)));
+
+        // Even though the pool delegate called stopLiquidation, the liquidation already happened, so debtLocker will account correctly
+        // It's NOT RECOMMENDED to use this method of a way to recover from a liquidation.
+        debtLocker.stopLiquidation();
+
+        // Claim will go through
+        uint256[7] memory details =  pool.claim(address(loanV2), address(debtLockerFactory));
+
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
+
+        assertEq(details[0], 280_135_620000);
+        assertEq(details[1], 0);
+        assertEq(details[2], 0);
+        assertEq(details[3], 0);
+        assertEq(details[4], 0);
+        assertEq(details[5], 280_135_620000);
+        assertEq(details[6], 719_864_380000);     
+
+        assertEq(pool.principalOut(), pool_principalOut - 719_864_380000 - 280_135_620000);   
+    }
+
+     function test_claim_liquidatonStopAndPullFunds() external {
+        _createLoan(INTEREST_ONLY, UNDER_COLLATERALIZED);
+        _fundLoan();
+        _drawdownLoan();
+
+         // Put in default
+        hevm.warp(block.timestamp + loanV2.nextPaymentDueDate() + loanV2.gracePeriod() + 1);
+
+        pool.triggerDefault(address(loanV2), address(debtLockerFactory));
+
+        try pool.claim(address(loanV2), address(debtLockerFactory)) { 
+            assertTrue(false, "Claim before liquidation is done"); 
+        } catch Error(string memory reason) {
+            assertEq(reason, "DL:HCOR:LIQ_NOT_FINISHED");
+        }
+
+        DebtLocker debtLocker =  DebtLocker(pool.debtLockers(address(loanV2), address(debtLockerFactory)));
+        address liquidator = debtLocker.liquidator();
+
+        // Pool Delegate mistankely stops liquidation before it's done.
+        debtLocker.stopLiquidation();
+
+        // Claim will go through
+        uint256[7] memory details =  pool.claim(address(loanV2), address(debtLockerFactory));
+
+        assertEq(usdc.balanceOf(address(loanV2)), 0);
+
+        assertEq(details[0], 0);
+        assertEq(details[1], 0);
+        assertEq(details[2], 0);
+        assertEq(details[3], 0);
+        assertEq(details[4], 0);
+        assertEq(details[5], 0);
+        assertEq(details[6], 1_000_000_000000);        
+
+        assertEq(pool.principalOut(), pool_principalOut - 1_000_000_000000); 
+
+
+        // Pool Delegate can still recover funds
+        uint256 balanceBefore = wbtc.balanceOf(address(this));
+
+        debtLocker.pullFundsFromLiquidator(address(liquidator), WBTC, address(this), 5 * BTC);
+
+        assertEq(wbtc.balanceOf(address(this)), balanceBefore + 5 * BTC);
     }
 }

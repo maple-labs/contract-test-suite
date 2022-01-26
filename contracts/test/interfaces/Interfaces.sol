@@ -74,6 +74,8 @@ interface IPoolLike {
 
     function liquidityCap() external view returns (uint256 liquidityCap_);
 
+    function liquidityLocker() external view returns (address liquidityLocker_);
+
     function poolLosses() external view returns (uint256 poolLossess_);
 
     function principalOut() external view returns (uint256 principalOut_);
