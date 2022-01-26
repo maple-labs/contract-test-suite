@@ -19,7 +19,7 @@ make init
 This project was built using [dapptools](https://github.com/dapphub/dapptools).
 
 #### Mainnet State Caching
-To improve testing performance, mainnet state is cached and added to a github repository cts-cache, that is used as a submodule. This allows a first time developer to access cached state. If a new test is added taht accesses new mainnet state that is not in the cache, the test will fail and will require that the cache be updated. This can be done with `make update`.
+To improve testing performance, mainnet state is cached and added to a github repository cts-cache, that is used as a submodule. This allows a first time developer to access cached state. If a new test is added that accesses new mainnet state that is not in the cache, the test will fail and will require that the cache be updated. This can be done with `make update`.
 
 ## About Maple
 [Maple Finance](https://maple.finance) is a decentralized corporate credit market. Maple provides capital to institutional borrowers through globally accessible fixed-income yield opportunities.
