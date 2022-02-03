@@ -37,10 +37,10 @@ import { AddressRegistry } from "../AddressRegistry.sol";
 contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
     uint256 constant WAD      = 10 ** 18;  // ETH  precision
-    uint256 constant BTC      = 10 ** 8;   // WBTC precision
+    uint256 constant BTC      = 10 ** 8;   // WETH precision
     uint256 constant USD      = 10 ** 6;   // USDC precision
 
-    // Mainnet State Constants 
+    // Mainnet State Constants
     // Block 13499527 - Wednesday, October 27, 2021 12:58:18 PM UTC
     // Using Orthogonal Pool for testing
     uint256 constant PRINCIPAL_OUT     = 132_000_000_000000;
@@ -74,7 +74,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
     IERC20 bpt  = IERC20(BALANCER_POOL);
     IERC20 usdc = IERC20(USDC);
-    IERC20 wbtc = IERC20(WBTC);
+    IERC20 weth = IERC20(WETH);
 
     MapleLoan            loanImplementation;
     MapleLoanFactory     loanFactory;
@@ -97,7 +97,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         /*** Whitelist collateral and funds assets ***/
         /*********************************************/
 
-        globals.setCollateralAsset(WBTC, true);
+        globals.setCollateralAsset(WETH, true);
         globals.setLiquidityAsset(USDC, true);
 
         /*************************************************************/
@@ -137,7 +137,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         /*** Deploy LoanV2 ***/
         /*********************/
 
-        address[2] memory assets = [WBTC, USDC];
+        address[2] memory assets = [WETH, USDC];
 
         uint256[3] memory termDetails = [
             uint256(10 days),  // 10 day grace period
@@ -146,7 +146,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         ];
 
         // 5 BTC @ ~$58k = $290k = 29% collateralized, interest only
-        uint256[3] memory requests = [uint256(5 * BTC), uint256(1_000_000 * USD), uint256(1_000_000 * USD)];  
+        uint256[3] memory requests = [uint256(25 ether), uint256(1_000_000 * USD), uint256(1_000_000 * USD)];
 
         uint256[4] memory rates = [uint256(0.12e18), uint256(0), uint256(0), uint256(0.6e18)];
 
@@ -169,9 +169,9 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(usdc_stakeLockerBal     = usdc.balanceOf(ORTHOGONAL_SL),  SL_USDC_BAL);
         assertEq(usdc_poolDelegateBal    = usdc.balanceOf(ORTHOGONAL_PD),  PD_USDC_BAL);
         assertEq(usdc_treasuryBal        = usdc.balanceOf(MAPLE_TREASURY), TREASURY_USDC_BAL);
-        
+
         assertEq(usdc.balanceOf(address(loanV2)), 0);
-        
+
         pool.fundLoan(address(loanV2), address(debtLockerFactory), fundAmount);
 
         assertEq(pool.principalOut(),             pool_principalOut       += fundAmount);
@@ -182,32 +182,32 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(usdc.balanceOf(MAPLE_TREASURY),  usdc_treasuryBal        += establishmentFee);  // Treasury estab fee
 
         assertEq(usdc.balanceOf(address(loanV2)), fundAmount - establishmentFee * 2);  // Remaining funds
-        
+
         /*********************/
         /*** Drawdown Loan ***/
         /*********************/
 
         uint256 drawableFunds = fundAmount - establishmentFee * 2;
 
-        erc20_mint(WBTC, 0, address(borrower), 5 * BTC);
+        erc20_mint(WETH, 3, address(borrower), 25 ether);
 
         assertEq(loanV2.drawableFunds(),            drawableFunds);
         assertEq(usdc.balanceOf(address(loanV2)),   drawableFunds);
         assertEq(usdc.balanceOf(address(borrower)), 0);
-        assertEq(wbtc.balanceOf(address(borrower)), 5 * BTC);
-        assertEq(wbtc.balanceOf(address(loanV2)),   0);
+        assertEq(weth.balanceOf(address(borrower)), 25 ether);
+        assertEq(weth.balanceOf(address(loanV2)),   0);
         assertEq(loanV2.collateral(),               0);
 
-        borrower.erc20_approve(WBTC, address(loanV2), 5 * BTC);
+        borrower.erc20_approve(WETH, address(loanV2), 25 ether);
         borrower.loan_drawdownFunds(address(loanV2), drawableFunds, address(borrower));
 
         assertEq(loanV2.drawableFunds(),            0);
         assertEq(usdc.balanceOf(address(loanV2)),   0);
         assertEq(usdc.balanceOf(address(borrower)), drawableFunds);
-        assertEq(wbtc.balanceOf(address(borrower)), 0);
-        assertEq(wbtc.balanceOf(address(loanV2)),   5 * BTC);
-        assertEq(loanV2.collateral(),               5 * BTC);
-        
+        assertEq(weth.balanceOf(address(borrower)), 0);
+        assertEq(weth.balanceOf(address(loanV2)),   25 ether);
+        assertEq(loanV2.collateral(),               25 ether);
+
         /********************************/
         /*** Make Payment 1 (On time) ***/
         /********************************/
@@ -244,6 +244,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         /************************************/
         /*** Claim Funds as Pool Delegate ***/
         /************************************/
+
         uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
@@ -325,7 +326,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
         assertEq(loanV2.drawableFunds(),      0);
         assertEq(loanV2.claimableFunds(),     1_000_000 * USD + interestPortion * 2);
-        assertEq(loanV2.nextPaymentDueDate(), 0); 
+        assertEq(loanV2.nextPaymentDueDate(), 0);
         assertEq(loanV2.principal(),          0);
         assertEq(loanV2.paymentsRemaining(),  0);
 
@@ -334,7 +335,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         /**************************************************/
         /*** Claim Funds as Pool Delegate (Two Payments ***/
         /**************************************************/
-        
+
         details = pool.claim(address(loanV2), address(debtLockerFactory));
 
         assertEq(usdc.balanceOf(address(loanV2)), 0);
@@ -365,7 +366,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         /*** Deploy LoanV2 ***/
         /*********************/
 
-        address[2] memory assets = [WBTC, USDC];
+        address[2] memory assets = [WETH, USDC];
 
         uint256[3] memory termDetails = [
             uint256(10 days),  // 10 day grace period
@@ -374,7 +375,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         ];
 
         // 25 BTC @ $58k = $1.45m = 145% collateralized, interest only
-        uint256[3] memory requests = [uint256(25 * BTC), uint256(1_000_000 * USD), uint256(1_000_000 * USD)];  
+        uint256[3] memory requests = [uint256(25 ether), uint256(1_000_000 * USD), uint256(1_000_000 * USD)];
 
         uint256[4] memory rates = [uint256(0.12e18), uint256(0), uint256(0), uint256(0.6e18)];
 
@@ -390,20 +391,20 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
         uint256 totalPrincipal   = 1_000_000 * USD;
         uint256 establishmentFee = totalPrincipal * 25 * 90 / 365 / 10_000;  // Investor fee and treasury fee are both 25bps
-        
+
         pool.fundLoan(address(loanV2), address(debtLockerFactory), totalPrincipal);
-        
+
         /*********************/
         /*** Drawdown Loan ***/
         /*********************/
 
         uint256 drawableFunds = totalPrincipal - establishmentFee * 2;
 
-        erc20_mint(WBTC, 0, address(borrower), 25 * BTC);
+        erc20_mint(WETH, 3, address(borrower), 25 ether);
 
-        borrower.erc20_approve(WBTC, address(loanV2), 25 * BTC);
+        borrower.erc20_approve(WETH, address(loanV2), 25 ether);
         borrower.loan_drawdownFunds(address(loanV2), drawableFunds, address(borrower));
-        
+
         /********************************/
         /*** Make Payment 1 (On time) ***/
         /********************************/
@@ -470,45 +471,45 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         DebtLocker debtLocker = DebtLocker(pool.debtLockers(address(loanV2), address(debtLockerFactory)));
 
         // Loan State
-        assertEq(loanV2.drawableFunds(),      0);     
-        assertEq(loanV2.claimableFunds(),     0);    
-        assertEq(loanV2.collateral(),         25 * BTC);        
-        assertEq(loanV2.lender(),             address(debtLocker));            
+        assertEq(loanV2.drawableFunds(),      0);
+        assertEq(loanV2.claimableFunds(),     0);
+        assertEq(loanV2.collateral(),         25 ether);
+        assertEq(loanV2.lender(),             address(debtLocker));
         assertEq(loanV2.nextPaymentDueDate(), start + 90 days);
-        assertEq(loanV2.paymentsRemaining(),  1); 
-        assertEq(loanV2.principal(),          1_000_000 * USD);         
+        assertEq(loanV2.paymentsRemaining(),  1);
+        assertEq(loanV2.principal(),          1_000_000 * USD);
 
         // DebtLocker State
         assertTrue( debtLocker.liquidator() == address(0));
         assertTrue(!debtLocker.repossessed());
 
-        // USDC/WBTC State
+        // USDC/WETH State
         assertEq(usdc.balanceOf(address(loanV2)),     0);
         assertEq(usdc.balanceOf(address(debtLocker)), 0);
-        assertEq(wbtc.balanceOf(address(loanV2)),     25 * BTC);
-        assertEq(wbtc.balanceOf(address(debtLocker)), 0);
+        assertEq(weth.balanceOf(address(loanV2)),     25 ether);
+        assertEq(weth.balanceOf(address(debtLocker)), 0);
 
         pool.triggerDefault(address(loanV2), address(debtLockerFactory));
 
         // Loan State
-        assertEq(loanV2.drawableFunds(),      0);     
-        assertEq(loanV2.claimableFunds(),     0);    
-        assertEq(loanV2.collateral(),         0);        
-        assertEq(loanV2.lender(),             address(debtLocker));            
+        assertEq(loanV2.drawableFunds(),      0);
+        assertEq(loanV2.claimableFunds(),     0);
+        assertEq(loanV2.collateral(),         0);
+        assertEq(loanV2.lender(),             address(debtLocker));
         assertEq(loanV2.nextPaymentDueDate(), 0);
-        assertEq(loanV2.paymentsRemaining(),  0); 
-        assertEq(loanV2.principal(),          0); 
+        assertEq(loanV2.paymentsRemaining(),  0);
+        assertEq(loanV2.principal(),          0);
 
         // DebtLocker State
         assertTrue(debtLocker.liquidator() != address(0));
         assertTrue(debtLocker.repossessed());
 
-        // USDC/WBTC State
+        // USDC/WETH State
         assertEq(usdc.balanceOf(address(loanV2)),                  0);
         assertEq(usdc.balanceOf(address(debtLocker)),              0);
-        assertEq(wbtc.balanceOf(address(loanV2)),                  0);
-        assertEq(wbtc.balanceOf(address(debtLocker)),              0);
-        assertEq(wbtc.balanceOf(address(debtLocker.liquidator())), 25 * BTC);
+        assertEq(weth.balanceOf(address(loanV2)),                  0);
+        assertEq(weth.balanceOf(address(debtLocker)),              0);
+        assertEq(weth.balanceOf(address(debtLocker.liquidator())), 25 ether);
 
         /*******************************************************/
         /*** Pool Delegate configures liquidation parameters ***/
@@ -517,7 +518,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         // Note: This should be part of liquidation UX in webapp for PoolDelegate
 
         debtLocker.setAllowedSlippage(300);        // 3% slippage allowed
-        debtLocker.setMinRatio(40_000 * 10 ** 6);  // Minimum 40k USDC per WBTC (Market price is ~43k at block 13276702)
+        debtLocker.setMinRatio(40_000 * 10 ** 6);  // Minimum 40k USDC per WETH (Market price is ~43k at block 13276702)
 
         /**********************************/
         /*** Collateral gets liquidated ***/
@@ -535,41 +536,41 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
             erc20_mint(USDC, 9, address(rebalancer), type(uint256).max);  // Mint "infinite" USDC into rebalancer for simulating arbitrage
 
-            assertEq(wbtc.balanceOf(address(liquidator)), 25 * BTC);
+            assertEq(weth.balanceOf(address(liquidator)), 25 ether);
             assertEq(usdc.balanceOf(address(liquidator)), 0);
             assertEq(usdc.balanceOf(address(debtLocker)), 0);
             assertEq(usdc.balanceOf(address(keeper1)),    0);
             assertEq(usdc.balanceOf(address(keeper2)),    0);
 
-            assertEq(globals.getLatestPrice(WBTC),            58_975_92000000);  // $58,975.92/WBTC market price
-            assertEq(liquidator.getExpectedAmount(25 * BTC), 1_430_166_060000);  // $57,206.64/WBTC sale price (97% of market price)
+            assertEq(globals.getLatestPrice(WETH),            58_975_92000000);  // $58,975.92/WETH market price
+            assertEq(liquidator.getExpectedAmount(25 ether), 1_430_166_060000);  // $57,206.64/WETH sale price (97% of market price)
 
             // Perform liquidation swaps from each keeper
             keeper1.strategy_flashBorrowLiquidation(
-                address(sushiswapStrategy), 
-                address(debtLocker.liquidator()), 
-                10 * BTC, 
+                address(sushiswapStrategy),
+                address(debtLocker.liquidator()),
+                10 ether,
                 type(uint256).max,
                 uint256(0),
-                WBTC, 
-                WETH, 
-                USDC, 
+                WETH,
+                WETH,
+                USDC,
                 address(keeper1)
             );
 
             keeper2.strategy_flashBorrowLiquidation(
-                address(uniswapV2Strategy), 
-                address(debtLocker.liquidator()), 
-                15 * BTC, 
+                address(uniswapV2Strategy),
+                address(debtLocker.liquidator()),
+                15 ether,
                 type(uint256).max,
                 uint256(0),
-                WBTC, 
-                WETH, 
-                USDC, 
+                WETH,
+                WETH,
+                USDC,
                 address(keeper2)
             );
-            
-            assertEq(wbtc.balanceOf(address(liquidator)), 0);
+
+            assertEq(weth.balanceOf(address(liquidator)), 0);
             assertEq(usdc.balanceOf(address(liquidator)), 0);
             assertEq(usdc.balanceOf(address(debtLocker)), 1_430_166_060000);  // Same value as `getExpectedAmount`
             assertEq(usdc.balanceOf(address(keeper1)),    8_994_323176);      // Keeper profits
@@ -594,7 +595,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
         uint256 totalRecovered          = 1_430_166_060000;  // Recovered from liquidation
         uint256 interestFromLiquidation = 430_166_060000;    // totalRecovered - 1m
-        
+
         uint256 ongoingFee = interestFromLiquidation * 1000 / 10_000;  // Applies to both StakeLocker and Pool Delegate since both have 10% ongoing fees
 
         assertEq(details[0], totalRecovered);           // Total funds recovered
@@ -617,17 +618,17 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
     function liquidate(Keeper keeper, address strategy, DebtLocker debtLocker, uint256 amount) internal {
         keeper.strategy_flashBorrowLiquidation(
-            strategy, 
-            address(debtLocker.liquidator()), 
-            amount, 
+            strategy,
+            address(debtLocker.liquidator()),
+            amount,
             type(uint256).max,
             uint256(0),
-            WBTC, 
-            WETH, 
-            USDC, 
+            WETH,
+            WETH,
+            USDC,
             address(keeper)
         );
-    } 
+    }
 
     function test_triggerDefault_underCollateralized() external {
 
@@ -635,7 +636,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         /*** Deploy LoanV2 ***/
         /*********************/
 
-        address[2] memory assets = [WBTC, USDC];
+        address[2] memory assets = [WETH, USDC];
 
         uint256[3] memory termDetails = [
             uint256(10 days),  // 10 day grace period
@@ -644,7 +645,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         ];
 
         // 250 BTC @ $58k = $14.5m = 14.5% collateralized, interest only
-        uint256[3] memory requests = [uint256(250 * BTC), uint256(100_000_000 * USD), uint256(100_000_000 * USD)];  
+        uint256[3] memory requests = [uint256(250 ether), uint256(100_000_000 * USD), uint256(100_000_000 * USD)];
 
         uint256[4] memory rates = [uint256(0.12e18), uint256(0), uint256(0), uint256(0.6e18)];
 
@@ -657,27 +658,27 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         /*****************/
         /*** Fund Loan ***/
         /*****************/
-        
+
         uint256 totalPrincipal   = 100_000_000 * USD;
         uint256 establishmentFee = totalPrincipal * 25 * 90 / 365 / 10_000;  // Investor fee and treasury fee are both 25bps
-   
+
         // Mint and deposit extra funds to raise liquidity locker balance
         pool.setLiquidityCap(pool.liquidityCap() + totalPrincipal);
         erc20_mint(USDC, 9, address(this), totalPrincipal);
         usdc.approve(address(pool), totalPrincipal);
-        pool.deposit(totalPrincipal);  
-        
+        pool.deposit(totalPrincipal);
+
         pool.fundLoan(address(loanV2), address(debtLockerFactory), totalPrincipal);
-        
+
         /*********************/
         /*** Drawdown Loan ***/
         /*********************/
 
         uint256 drawableFunds = totalPrincipal - establishmentFee * 2;
 
-        erc20_mint(WBTC, 0, address(borrower), 250 * BTC);
+        erc20_mint(WETH, 3, address(borrower), 250 ether);
 
-        borrower.erc20_approve(WBTC, address(loanV2), 250 * BTC);
+        borrower.erc20_approve(WETH, address(loanV2), 250 ether);
         borrower.loan_drawdownFunds(address(loanV2), drawableFunds, address(borrower));
 
         /********************************/
@@ -745,45 +746,45 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         DebtLocker debtLocker = DebtLocker(pool.debtLockers(address(loanV2), address(debtLockerFactory)));
 
         // Loan State
-        assertEq(loanV2.drawableFunds(),      0);     
-        assertEq(loanV2.claimableFunds(),     0);    
-        assertEq(loanV2.collateral(),         250 * BTC);        
-        assertEq(loanV2.lender(),             address(debtLocker));            
+        assertEq(loanV2.drawableFunds(),      0);
+        assertEq(loanV2.claimableFunds(),     0);
+        assertEq(loanV2.collateral(),         250 ether);
+        assertEq(loanV2.lender(),             address(debtLocker));
         assertEq(loanV2.nextPaymentDueDate(), start + 90 days);
-        assertEq(loanV2.paymentsRemaining(),  1); 
-        assertEq(loanV2.principal(),          100_000_000 * USD);         
+        assertEq(loanV2.paymentsRemaining(),  1);
+        assertEq(loanV2.principal(),          100_000_000 * USD);
 
         // DebtLocker State
         assertTrue( debtLocker.liquidator() == address(0));
         assertTrue(!debtLocker.repossessed());
 
-        // USDC/WBTC State
+        // USDC/WETH State
         assertEq(usdc.balanceOf(address(loanV2)),     0);
         assertEq(usdc.balanceOf(address(debtLocker)), 0);
-        assertEq(wbtc.balanceOf(address(loanV2)),     250 * BTC);
-        assertEq(wbtc.balanceOf(address(debtLocker)), 0);
+        assertEq(weth.balanceOf(address(loanV2)),     250 ether);
+        assertEq(weth.balanceOf(address(debtLocker)), 0);
 
         pool.triggerDefault(address(loanV2), address(debtLockerFactory));
 
         // Loan State
-        assertEq(loanV2.drawableFunds(),      0);     
-        assertEq(loanV2.claimableFunds(),     0);    
-        assertEq(loanV2.collateral(),         0);        
-        assertEq(loanV2.lender(),             address(debtLocker));            
+        assertEq(loanV2.drawableFunds(),      0);
+        assertEq(loanV2.claimableFunds(),     0);
+        assertEq(loanV2.collateral(),         0);
+        assertEq(loanV2.lender(),             address(debtLocker));
         assertEq(loanV2.nextPaymentDueDate(), 0);
-        assertEq(loanV2.paymentsRemaining(),  0); 
-        assertEq(loanV2.principal(),          0); 
+        assertEq(loanV2.paymentsRemaining(),  0);
+        assertEq(loanV2.principal(),          0);
 
         // DebtLocker State
         assertTrue(debtLocker.liquidator() != address(0));
         assertTrue(debtLocker.repossessed());
 
-        // USDC/WBTC State
+        // USDC/WETH State
         assertEq(usdc.balanceOf(address(loanV2)),                  0);
         assertEq(usdc.balanceOf(address(debtLocker)),              0);
-        assertEq(wbtc.balanceOf(address(loanV2)),                  0);
-        assertEq(wbtc.balanceOf(address(debtLocker)),              0);
-        assertEq(wbtc.balanceOf(address(debtLocker.liquidator())), 250 * BTC);
+        assertEq(weth.balanceOf(address(loanV2)),                  0);
+        assertEq(weth.balanceOf(address(debtLocker)),              0);
+        assertEq(weth.balanceOf(address(debtLocker.liquidator())), 250 ether);
 
         /*******************************************************/
         /*** Pool Delegate configures liquidation parameters ***/
@@ -792,7 +793,7 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
         // Note: This should be part of liquidation UX in webapp for PoolDelegate
 
         debtLocker.setAllowedSlippage(300);        // 3% slippage allowed
-        debtLocker.setMinRatio(40_000 * 10 ** 6);  // Minimum 40k USDC per WBTC (Market price is ~43k at block 13276702)
+        debtLocker.setMinRatio(40_000 * 10 ** 6);  // Minimum 40k USDC per WETH (Market price is ~43k at block 13276702)
 
         /**********************************/
         /*** Collateral gets liquidated ***/
@@ -810,24 +811,24 @@ contract ParityTest is AddressRegistry, StateManipulations, TestUtils {
 
             erc20_mint(USDC, 9, address(rebalancer), type(uint256).max);  // Mint "infinite" USDC into rebalancer for simulating arbitrage
 
-            assertEq(wbtc.balanceOf(address(liquidator)), 250 * BTC);
+            assertEq(weth.balanceOf(address(liquidator)), 250 ether);
             assertEq(usdc.balanceOf(address(liquidator)), 0);
             assertEq(usdc.balanceOf(address(debtLocker)), 0);
             assertEq(usdc.balanceOf(address(keeper1)),    0);
             assertEq(usdc.balanceOf(address(keeper2)),    0);
 
-            assertEq(globals.getLatestPrice(WBTC),            58_975_92000000);    // $58,975.92/WBTC market price
-            assertEq(liquidator.getExpectedAmount(250 * BTC), 14_301_660_600000);  // $57,206.64/WBTC sale price (97% of market price)
+            assertEq(globals.getLatestPrice(WETH),            58_975_92000000);    // $58,975.92/WETH market price
+            assertEq(liquidator.getExpectedAmount(250 ether), 14_301_660_600000);  // $57,206.64/WETH sale price (97% of market price)
 
             // Perform 10 liquidation swaps from each keeper, simulating arbitrage from the market after each trade
             for (uint256 i; i < 10; ++i) {
-                liquidate(keeper1, address(sushiswapStrategy), debtLocker, 10 * BTC);
-   
-                rebalancer.swap(sushiswapStrategy.ROUTER(), 10 * BTC, type(uint256).max, USDC, WETH, WBTC);  // Perform fake arbitrage transaction to get price back up 
+                liquidate(keeper1, address(sushiswapStrategy), debtLocker, 10 ether);
 
-                liquidate(keeper2, address(uniswapV2Strategy), debtLocker, 15 * BTC);
-   
-                rebalancer.swap(uniswapV2Strategy.ROUTER(), 15 * BTC, type(uint256).max, USDC, WETH, WBTC);  // Perform fake arbitrage transaction to get price back up 
+                rebalancer.swap(sushiswapStrategy.ROUTER(), 10 ether, type(uint256).max, USDC, WETH, WETH);  // Perform fake arbitrage transaction to get price back up
+
+                liquidate(keeper2, address(uniswapV2Strategy), debtLocker, 15 ether);
+
+                rebalancer.swap(uniswapV2Strategy.ROUTER(), 15 ether, type(uint256).max, USDC, WETH, WETH);  // Perform fake arbitrage transaction to get price back up
             }
         }
 
