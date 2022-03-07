@@ -19,8 +19,9 @@ skip_build=$([ "$build" == "0" ] && echo "1" || echo "0")
 [[ $SKIP_MAINNET_CHECK || "$ETH_RPC_URL" && "$(seth chain)" == "ethlive" ]] || { echo "Please set a mainnet ETH_RPC_URL"; exit 1; }
 
 # Wednesday, October 27, 2021 12:58:18 PM UTC
-export DAPP_TEST_TIMESTAMP=1635339498
-export DAPP_TEST_NUMBER=13499527
+# export DAPP_TEST_TIMESTAMP=1635339498
+# export DAPP_TEST_NUMBER=13499527
+export DAPP_TEST_NUMBER=14135691
 
 export DAPP_SOLC_VERSION=0.8.7
 export DAPP_SRC="contracts"

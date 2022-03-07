@@ -30,11 +30,12 @@ contract AddressRegistry {
     address constant REPAYMENT_CALC      = 0x7d622bB6Ed13a599ec96366Fa95f2452c64ce602;
     address constant LATEFEE_CALC        = 0x8dC5aa328142aa8a008c25F66a77eaA8E4B46f3c;
     address constant PREMIUM_CALC        = 0xe88Ab4Cf1Ec06840d16feD69c964aD9DAFf5c6c2;
+    address constant ETH_USD_ORACLE      = 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419;
 
     /*******************************/
     /*** Deployed Pool Contracts ***/
     /*******************************/
-    
+
     address constant ORTHOGONAL_PD       = 0xA6cCb9483E3E7a737E3a4F5B72a1Ce51838ba122;
     address constant ORTHOGONAL_POOL     = 0xFeBd6F15Df3B73DC4307B1d7E65D46413e710C27;
     address constant ORTHOGONAL_POOL_LIB = 0x2c1C30fb8cC313Ef3cfd2E2bBf2da88AdD902C30;

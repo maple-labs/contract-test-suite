@@ -40,6 +40,8 @@ interface IMapleGlobalsLike {
 
     function setValidSubFactory(address superFactory, address subFactory, bool valid) external;
 
+    function setPriceOracle(address, address) external;
+
     function isValidSubFactory(address superFactory, address subFactory, uint8 type_) external returns (bool isValidSubFactory_);
 
     function treasuryFee() external view returns (uint256 treasuryFee_);
@@ -93,7 +95,7 @@ interface IStakeLockerFactoryLike {}
 interface IStakeLockerLike {
 
     function bptLosses() external view returns (uint256 bptLossess_);
-    
+
 }
 
 interface IUniswapV2Router02Like {}
