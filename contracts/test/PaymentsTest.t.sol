@@ -424,12 +424,12 @@ contract PaymentsTest is AddressRegistry, StateManipulations, TestUtils {
 
         pool.fundLoan(address(loanV2), address(debtLockerFactory), fundAmount);
 
-        assertEq(pool.principalOut(),             pool_principalOut       += fundAmount);
-        assertEq(pool.interestSum(),              pool_interestSum        += 0);
-        assertEq(usdc.balanceOf(ORTHOGONAL_LL),   usdc_liquidityLockerBal -= fundAmount);
-        assertEq(usdc.balanceOf(ORTHOGONAL_SL),   usdc_stakeLockerBal     += 0);
-        assertEq(usdc.balanceOf(ORTHOGONAL_PD),   usdc_poolDelegateBal    += 0);
-        assertEq(usdc.balanceOf(MAPLE_TREASURY),  usdc_treasuryBal        += 0);
+        assertEq(pool.principalOut(),            pool_principalOut       += fundAmount);
+        assertEq(pool.interestSum(),             pool_interestSum        += 0);
+        assertEq(usdc.balanceOf(ORTHOGONAL_LL),  usdc_liquidityLockerBal -= fundAmount);
+        assertEq(usdc.balanceOf(ORTHOGONAL_SL),  usdc_stakeLockerBal     += 0);
+        assertEq(usdc.balanceOf(ORTHOGONAL_PD),  usdc_poolDelegateBal    += 0);
+        assertEq(usdc.balanceOf(MAPLE_TREASURY), usdc_treasuryBal        += 0);
 
         assertEq(usdc.balanceOf(address(loanV2)), fundAmount);  // Remaining funds
 
