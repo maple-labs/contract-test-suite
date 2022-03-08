@@ -28,7 +28,7 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
     uint256 constant BTC = 10 ** 8;   // WBTC precision
     uint256 constant USD = 10 ** 6;   // USDC precision
 
-    // Mainnet State Constants 
+    // Mainnet State Constants
     // Block 13499527 - Wednesday, October 27, 2021 12:58:18 PM UTC
     // Using Orthogonal Pool for testing
     uint256 constant PRINCIPAL_OUT     = 132_000_000_000000;
@@ -134,7 +134,7 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
         ];
 
         // 5 BTC @ ~$58k = $290k = 29% collateralized, interest only
-        uint256[3] memory requests = [uint256(5 * BTC), uint256(1_000_000 * USD), uint256(1_000_000 * USD)];  
+        uint256[3] memory requests = [uint256(5 * BTC), uint256(1_000_000 * USD), uint256(1_000_000 * USD)];
 
         uint256[4] memory rates = [uint256(0.12e18), uint256(0), uint256(0), uint256(0.6e18)];
 
@@ -179,7 +179,6 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
         /*****************/
 
         uint256 fundAmount       = 1_000_000 * USD;
-        uint256 establishmentFee = fundAmount * 25 * 90 / 365 / 10_000;  // Investor fee and treasury fee are both 25bps
 
         assertEq(pool_principalOut       = pool.principalOut(),            PRINCIPAL_OUT);
         assertEq(pool_interestSum        = pool.interestSum(),             INTEREST_SUM);
@@ -187,19 +186,19 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(usdc_stakeLockerBal     = usdc.balanceOf(ORTHOGONAL_SL),  SL_USDC_BAL);
         assertEq(usdc_poolDelegateBal    = usdc.balanceOf(ORTHOGONAL_PD),  PD_USDC_BAL);
         assertEq(usdc_treasuryBal        = usdc.balanceOf(MAPLE_TREASURY), TREASURY_USDC_BAL);
-        
+
         assertEq(usdc.balanceOf(address(loanV2)), 0);
-        
+
         pool.fundLoan(address(loanV2), address(debtLockerFactory), fundAmount);
 
         assertEq(pool.principalOut(),             pool_principalOut       += fundAmount);
         assertEq(pool.interestSum(),              pool_interestSum        += 0);
         assertEq(usdc.balanceOf(ORTHOGONAL_LL),   usdc_liquidityLockerBal -= fundAmount);
         assertEq(usdc.balanceOf(ORTHOGONAL_SL),   usdc_stakeLockerBal     += 0);
-        assertEq(usdc.balanceOf(ORTHOGONAL_PD),   usdc_poolDelegateBal    += establishmentFee);  // Investor estab fee
-        assertEq(usdc.balanceOf(MAPLE_TREASURY),  usdc_treasuryBal        += establishmentFee);  // Treasury estab fee
+        assertEq(usdc.balanceOf(ORTHOGONAL_PD),   usdc_poolDelegateBal    += 0);  // Investor estab fee
+        assertEq(usdc.balanceOf(MAPLE_TREASURY),  usdc_treasuryBal        += 0);  // Treasury estab fee
 
-        assertEq(usdc.balanceOf(address(loanV2)), fundAmount - establishmentFee * 2);  // Remaining funds
+        assertEq(usdc.balanceOf(address(loanV2)), fundAmount);  // Remaining funds
 
         /***************************/
         /*** Upgrade Debt Locker ***/
@@ -218,13 +217,13 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
         // Not Governor can't update
         GenericAccount account = new GenericAccount();
 
-        try account.call(address(debtLocker), abi.encodeWithSelector(DebtLocker.upgrade.selector, 2, new bytes(0))) { 
+        try account.call(address(debtLocker), abi.encodeWithSelector(DebtLocker.upgrade.selector, 2, new bytes(0))) {
             assertTrue(false, "Generic account could upgrade");
         } catch { }
 
         assertEq(debtLocker.implementation(), address(debtLockerImplementation));
         assertEq(debtLocker.factory(),        address(debtLockerFactory));
-        
+
         // address(this) is PoolDelegate
         debtLocker.upgrade(2, new bytes(0));
 

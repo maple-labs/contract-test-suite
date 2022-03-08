@@ -28,7 +28,7 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
     uint256 constant BTC = 10 ** 8;   // WBTC precision
     uint256 constant USD = 10 ** 6;   // USDC precision
 
-    // Mainnet State Constants 
+    // Mainnet State Constants
     // Block 13499527 - Wednesday, October 27, 2021 12:58:18 PM UTC
     // Using Orthogonal Pool for testing
     uint256 constant PRINCIPAL_OUT     = 132_000_000_000000;
@@ -139,9 +139,9 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
         ];
 
         // 5 BTC @ ~$58k = $290k = 29% collateralized, interest only
-        uint256[3] memory requests = [uint256(5 * BTC), uint256(1_000_000 * USD), uint256(1_000_000 * USD)];  
+        uint256[3] memory requests = [uint256(5 * BTC), uint256(1_000_000 * USD), uint256(1_000_000 * USD)];
 
-        uint256[4] memory rates = [uint256(0.12e18), uint256(0), uint256(0.05e18), uint256(0.6e18)]; 
+        uint256[4] memory rates = [uint256(0.12e18), uint256(0), uint256(0.05e18), uint256(0.6e18)];
 
         bytes memory arguments = loanInitializer.encodeArguments(address(borrower), assets, termDetails, requests, rates);
 
@@ -154,25 +154,22 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
             /*** Fund Loan ***/
             /*****************/
 
-            uint256 fundAmount       = 1_000_000 * USD;
-            uint256 establishmentFee = fundAmount * 25 * 90 / 365 / 10_000;  // Investor fee and treasury fee are both 25bps
-            
+            uint256 fundAmount = 1_000_000 * USD;
+
             assertEq(usdc.balanceOf(address(loanV2)), 0);
-            
+
             pool.fundLoan(address(loanV2), address(debtLockerFactory), fundAmount);
-            
+
             /*********************/
             /*** Drawdown Loan ***/
             /*********************/
 
-            uint256 drawableFunds = fundAmount - establishmentFee * 2;
-
             erc20_mint(WBTC, 0, address(borrower), 5 * BTC);
 
             borrower.erc20_approve(WBTC, address(loanV2), 5 * BTC);
-            borrower.loan_drawdownFunds(address(loanV2), drawableFunds, address(borrower));
+            borrower.loan_drawdownFunds(address(loanV2), fundAmount, address(borrower));
         }
-        
+
         /********************************/
         /*** Make Payment 1 (On time) ***/
         /********************************/
@@ -180,16 +177,20 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
         hevm.warp(loanV2.nextPaymentDueDate());
 
         // Check details for upcoming payment #1
-        ( uint256 principalPortion, uint256 interestPortion ) = loanV2.getNextPaymentBreakdown();
+        ( uint256 principalPortion, uint256 interestPortion, uint256 delegateFee, uint256 treasuryFee ) = loanV2.getNextPaymentBreakdown();
 
         assertEq(principalPortion, 0);
         assertEq(interestPortion,  9863_013698);
+        assertEq(delegateFee,      205_479452);
+        assertEq(treasuryFee,      205_479452);
+
+        uint256 totalPayment = interestPortion + delegateFee + treasuryFee;
 
         // Make first payment
-        erc20_mint(USDC, 9, address(borrower), interestPortion);
+        erc20_mint(USDC, 9, address(borrower), totalPayment);
 
-        borrower.erc20_approve(USDC, address(loanV2), interestPortion);
-        borrower.loan_makePayment(address(loanV2), interestPortion);
+        borrower.erc20_approve(USDC, address(loanV2), totalPayment);
+        borrower.loan_makePayment(address(loanV2), totalPayment);
 
         /************************************/
         /*** Claim Funds as Pool Delegate ***/
@@ -210,38 +211,40 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
         ];
 
         // 2 BTC @ ~$58k = $116k = 11.6% collateralized, partially amortized
-        uint256[3] memory refinanceRequests = [uint256(2 * BTC), uint256(2_000_000 * USD), uint256(1_000_000 * USD)];  
+        uint256[3] memory refinanceRequests = [uint256(2 * BTC), uint256(2_000_000 * USD), uint256(1_000_000 * USD)];
 
         uint256[4] memory refinanceRates = [uint256(0.10e18), uint256(0), uint256(0.04e18), uint256(0.4e18)];
 
         uint256 principalIncrease = refinanceRequests[1] - requests[1];
 
-        bytes[] memory data = new bytes[](9);
-        data[0] = abi.encodeWithSelector(Refinancer.setGracePeriod.selector,       refinanceTermDetails[0]);
-        data[1] = abi.encodeWithSelector(Refinancer.setPaymentInterval.selector,   refinanceTermDetails[1]);
-        data[2] = abi.encodeWithSelector(Refinancer.setPaymentsRemaining.selector, refinanceTermDetails[2]);
+        {
+            bytes[] memory data = new bytes[](9);
+            data[0] = abi.encodeWithSelector(Refinancer.setGracePeriod.selector,       refinanceTermDetails[0]);
+            data[1] = abi.encodeWithSelector(Refinancer.setPaymentInterval.selector,   refinanceTermDetails[1]);
+            data[2] = abi.encodeWithSelector(Refinancer.setPaymentsRemaining.selector, refinanceTermDetails[2]);
 
-        data[3] = abi.encodeWithSelector(Refinancer.setCollateralRequired.selector, refinanceRequests[0]);
-        data[4] = abi.encodeWithSelector(Refinancer.increasePrincipal.selector,     principalIncrease);
-        data[5] = abi.encodeWithSelector(Refinancer.setEndingPrincipal.selector,    refinanceRequests[2]);
+            data[3] = abi.encodeWithSelector(Refinancer.setCollateralRequired.selector, refinanceRequests[0]);
+            data[4] = abi.encodeWithSelector(Refinancer.increasePrincipal.selector,     principalIncrease);
+            data[5] = abi.encodeWithSelector(Refinancer.setEndingPrincipal.selector,    refinanceRequests[2]);
 
-        data[6] = abi.encodeWithSelector(Refinancer.setInterestRate.selector,        refinanceRates[0]);
-        data[7] = abi.encodeWithSelector(Refinancer.setLateFeeRate.selector,         refinanceRates[2]);
-        data[8] = abi.encodeWithSelector(Refinancer.setLateInterestPremium.selector, refinanceRates[3]);
+            data[6] = abi.encodeWithSelector(Refinancer.setInterestRate.selector,        refinanceRates[0]);
+            data[7] = abi.encodeWithSelector(Refinancer.setLateFeeRate.selector,         refinanceRates[2]);
+            data[8] = abi.encodeWithSelector(Refinancer.setLateInterestPremium.selector, refinanceRates[3]);
 
-        borrower.loan_proposeNewTerms(address(loanV2), address(refinancer), data);
+            borrower.loan_proposeNewTerms(address(loanV2), address(refinancer), block.timestamp + 10 days, data);
 
-        // Pool Delegate(address this) accepts new terms on Debt Locker
-        DebtLocker debtLocker = DebtLocker(loanV2.lender());
+            // Pool Delegate(address this) accepts new terms on Debt Locker
+            DebtLocker debtLocker = DebtLocker(loanV2.lender());
 
-        // Fails if there're no extra funds from pool
-        try debtLocker.acceptNewTerms(address(refinancer), data, principalIncrease) { assertTrue(false, "shouldn't succeed"); } catch { }
+            // Fails if there're no extra funds from pool
+            try debtLocker.acceptNewTerms(address(refinancer), block.timestamp + 10 days, data, principalIncrease) { assertTrue(false, "shouldn't succeed"); } catch { }
 
-        // Pool Delegate funds loan again for increasing amount
-        pool.fundLoan(address(loanV2), address(debtLockerFactory), principalIncrease);
+            // Pool Delegate funds loan again for increasing amount
+            pool.fundLoan(address(loanV2), address(debtLockerFactory), principalIncrease);
 
-        debtLocker.acceptNewTerms(address(refinancer), data, principalIncrease);
-        
+            debtLocker.acceptNewTerms(address(refinancer), block.timestamp + 10 days, data, principalIncrease);
+        }
+
         assertEq(loanV2.gracePeriod(),       refinanceTermDetails[0]);
         assertEq(loanV2.paymentInterval(),   refinanceTermDetails[1]);
         assertEq(loanV2.paymentsRemaining(), refinanceTermDetails[2]);
@@ -264,17 +267,21 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
         hevm.warp(loanV2.nextPaymentDueDate());
 
         // Check details for upcoming payment #1
-        (  principalPortion, interestPortion ) = loanV2.getNextPaymentBreakdown();
+        (  principalPortion, interestPortion, delegateFee, treasuryFee ) = loanV2.getNextPaymentBreakdown();
 
         // Principal is non-zero since the loan is now partially amortized
         assertEq(principalPortion, 329_257_314375);
-        assertEq(interestPortion,   24_657_534246);
+        assertEq(interestPortion,  24_657_534246);
+        assertEq(delegateFee,      616_438356);
+        assertEq(treasuryFee,      616_438356);
+
+        totalPayment = principalPortion + interestPortion + delegateFee + treasuryFee;
 
         // Make first payment
-        erc20_mint(USDC, 9, address(borrower), interestPortion);
+        erc20_mint(USDC, 9, address(borrower), totalPayment);
 
-        borrower.erc20_approve(USDC, address(loanV2), interestPortion + principalPortion);
-        borrower.loan_makePayment(address(loanV2), interestPortion + principalPortion);
+        borrower.erc20_approve(USDC, address(loanV2), totalPayment);
+        borrower.loan_makePayment(address(loanV2), totalPayment);
 
         assertEq(loanV2.drawableFunds(),      0);
         assertEq(loanV2.claimableFunds(),     interestPortion + principalPortion);
@@ -297,7 +304,6 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(details[4], 0);
         assertEq(details[5], 0);
         assertEq(details[6], 0);
-
     }
 
 }
