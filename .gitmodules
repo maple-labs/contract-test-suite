@@ -1,15 +1,21 @@
-[submodule "modules/loan"]
-	path = modules/loan
-	url = https://github.com/maple-labs/loan.git
 [submodule "modules/contract-test-utils"]
 	path = modules/contract-test-utils
 	url = https://github.com/maple-labs/contract-test-utils.git
-[submodule "modules/debt-locker"]
-	path = modules/debt-locker
-	url = https://github.com/maple-labs/debt-locker.git
 [submodule "modules/erc20"]
 	path = modules/erc20
 	url = https://github.com/maple-labs/erc20.git
 [submodule "modules/liquidations"]
 	path = modules/liquidations
 	url = https://github.com/maple-labs/liquidations
+[submodule "modules/debt-locker-v2"]
+	path = modules/debt-locker-v2
+	url = git@github.com:maple-labs/debt-locker
+[submodule "modules/debt-locker-v3"]
+	path = modules/debt-locker-v3
+	url = git@github.com:maple-labs/debt-locker
+[submodule "modules/loan-v2"]
+	path = modules/loan-v2
+	url = git@github.com:maple-labs/loan
+[submodule "modules/loan-v3"]
+	path = modules/loan-v3
+	url = git@github.com:maple-labs/loan
