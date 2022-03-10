@@ -132,7 +132,7 @@ contract UpgradeTest is AddressRegistry, TestUtils {
         debtLockerFactory.setDefaultVersion(200);
 
         globals.setValidSubFactory(POOL_FACTORY, address(debtLockerFactory), true);  // Whitelist new debtLockerFactory
-        assertTrue(globals.isValidSubFactory(POOL_FACTORY, address(debtLockerFactory), 200));
+        assertTrue(globals.isValidSubFactory(POOL_FACTORY, address(debtLockerFactory), 1));
 
         /*********************/
         /*** Deploy LoanV2 ***/
