@@ -45,6 +45,7 @@ contract UpgradeTest is AddressRegistry, TestUtils {
     uint256 constant SL_USDC_BAL       =     179_170_813216;
     uint256 constant PD_USDC_BAL       =     122_108_154489;
     uint256 constant TREASURY_USDC_BAL =     769_625_000000;
+    uint256 constant ESTABLISHMENT_FEE =         1232876712;
 
     uint256 start;
 
@@ -209,10 +210,10 @@ contract UpgradeTest is AddressRegistry, TestUtils {
         assertEq(pool.interestSum(),              pool_interestSum        += 0);
         assertEq(usdc.balanceOf(ORTHOGONAL_LL),   usdc_liquidityLockerBal -= fundAmount);
         assertEq(usdc.balanceOf(ORTHOGONAL_SL),   usdc_stakeLockerBal     += 0);
-        assertEq(usdc.balanceOf(ORTHOGONAL_PD),   usdc_poolDelegateBal    += 0);  // Investor estab fee
-        assertEq(usdc.balanceOf(MAPLE_TREASURY),  usdc_treasuryBal        += 0);  // Treasury estab fee
+        assertEq(usdc.balanceOf(ORTHOGONAL_PD),   usdc_poolDelegateBal    += ESTABLISHMENT_FEE / 2);  // Investor estab fee
+        assertEq(usdc.balanceOf(MAPLE_TREASURY),  usdc_treasuryBal        += ESTABLISHMENT_FEE / 2);  // Treasury estab fee
 
-        assertEq(usdc.balanceOf(address(loan)), fundAmount);  // Remaining funds
+        assertEq(usdc.balanceOf(address(loan)), fundAmount - ESTABLISHMENT_FEE);  // Remaining funds
 
         /***************************/
         /*** Upgrade Debt Locker ***/
