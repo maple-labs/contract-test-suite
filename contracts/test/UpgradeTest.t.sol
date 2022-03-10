@@ -1,19 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.8.7;
 
-import { IERC20 } from "../../modules/erc20/src/interfaces/IERC20.sol";
+import { IERC20 } from "../../modules/erc20/contracts/interfaces/IERC20.sol";
 
-import { TestUtils, StateManipulations } from "../../modules/contract-test-utils/contracts/test.sol";
+import { TestUtils } from "../../modules/contract-test-utils/contracts/test.sol";
 
-import { DebtLocker }            from "../../modules/debt-locker/contracts/DebtLocker.sol";
-import { DebtLockerFactory }     from "../../modules/debt-locker/contracts/DebtLockerFactory.sol";
-import { DebtLockerInitializer } from "../../modules/debt-locker/contracts/DebtLockerInitializer.sol";
+import { DebtLockerFactory }     from "../../modules/debt-locker-v3/contracts/DebtLockerFactory.sol";
+import { DebtLockerInitializer } from "../../modules/debt-locker-v3/contracts/DebtLockerInitializer.sol";
+import { MapleLoanFactory }      from "../../modules/loan-v3/contracts/MapleLoanFactory.sol";
 
-import { IMapleLoan } from "../../modules/loan/contracts/interfaces/IMapleLoan.sol";
+import { IDebtLocker as IDebtLockerV2 } from "../../modules/debt-locker-v2/contracts/interfaces/IDebtLocker.sol";
+import { IMapleLoan as IMapleLoanV2 }   from "../../modules/loan-v2/contracts/interfaces/IMapleLoan.sol";
 
-import { MapleLoan }            from "../../modules/loan/contracts/MapleLoan.sol";
-import { MapleLoanFactory }     from "../../modules/loan/contracts/MapleLoanFactory.sol";
-import { MapleLoanInitializer } from "../../modules/loan/contracts/MapleLoanInitializer.sol";
+import { DebtLocker           as DebtLockerV2 }           from "../../modules/debt-locker-v2/contracts/DebtLocker.sol";
+import { MapleLoan            as MapleLoanV2 }            from "../../modules/loan-v2/contracts/MapleLoan.sol";
+import { MapleLoanInitializer as MapleLoanInitializerV2 } from "../../modules/loan-v2/contracts/MapleLoanInitializer.sol";
+
+import { IDebtLocker as IDebtLockerV3 } from "../../modules/debt-locker-v3/contracts/interfaces/IDebtLocker.sol";
+import { IMapleLoan as IMapleLoanV3 }   from "../../modules/loan-v3/contracts/interfaces/IMapleLoan.sol";
+
+import { DebtLocker           as DebtLockerV3 }           from "../../modules/debt-locker-v3/contracts/DebtLocker.sol";
+import { MapleLoan            as MapleLoanV3 }            from "../../modules/loan-v3/contracts/MapleLoan.sol";
+import { MapleLoanInitializer as MapleLoanInitializerV3 } from "../../modules/loan-v3/contracts/MapleLoanInitializer.sol";
 
 import { IMapleGlobalsLike, IPoolLike } from "./interfaces/Interfaces.sol";
 
@@ -22,7 +30,7 @@ import { GenericAccount } from "./accounts/GenericAccount.sol";
 
 import { AddressRegistry } from "../AddressRegistry.sol";
 
-contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
+contract UpgradeTest is AddressRegistry, TestUtils {
 
     uint256 constant WAD = 10 ** 18;  // ETH  precision
     uint256 constant BTC = 10 ** 8;   // WBTC precision
@@ -52,11 +60,16 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
     Borrower borrower;
     Borrower notBorrower;
 
-    DebtLocker            debtLockerImplementation;
     DebtLockerFactory     debtLockerFactory;
     DebtLockerInitializer debtLockerInitializer;
+    DebtLockerV2          debtLockerImplementationV2;
+    DebtLockerV3          debtLockerImplementationV3;
 
-    IMapleLoan loanV2;
+    MapleLoanFactory       loanFactory;
+    MapleLoanInitializerV2 loanInitializerV2;
+    MapleLoanInitializerV3 loanInitializerV3;
+    MapleLoanV2            loanImplementationV2;
+    MapleLoanV3            loanImplementationV3;
 
     IMapleGlobalsLike globals = IMapleGlobalsLike(MAPLE_GLOBALS);
     IPoolLike         pool    = IPoolLike(ORTHOGONAL_POOL);        // Using deployed Orthogonal Pool
@@ -65,9 +78,8 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
     IERC20 usdc = IERC20(USDC);
     IERC20 wbtc = IERC20(WBTC);
 
-    MapleLoan            loanImplementation;
-    MapleLoanFactory     loanFactory;
-    MapleLoanInitializer loanInitializer;
+    address debtLocker;
+    address loan;
 
     function setUp() external {
 
@@ -78,7 +90,7 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
         start = block.timestamp;
 
         // Set existing Orthogonal PD as Governor
-        hevm.store(MAPLE_GLOBALS, bytes32(uint256(1)), bytes32(uint256(uint160(address(this)))));
+        vm.store(MAPLE_GLOBALS, bytes32(uint256(1)), bytes32(uint256(uint160(address(this)))));
 
         borrower    = new Borrower();
         notBorrower = new Borrower();
@@ -95,13 +107,13 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
         /*************************************************************/
 
         // Deploy new LoanFactory, implementation, and initializer
-        loanFactory        = new MapleLoanFactory(MAPLE_GLOBALS);
-        loanImplementation = new MapleLoan();
-        loanInitializer    = new MapleLoanInitializer();
+        loanFactory          = new MapleLoanFactory(MAPLE_GLOBALS);
+        loanImplementationV2 = new MapleLoanV2();
+        loanInitializerV2    = new MapleLoanInitializerV2();
 
         // Register the new implementations and set default version
-        loanFactory.registerImplementation(1, address(loanImplementation), address(loanInitializer));
-        loanFactory.setDefaultVersion(1);
+        loanFactory.registerImplementation(200, address(loanImplementationV2), address(loanInitializerV2));
+        loanFactory.setDefaultVersion(200);
 
         globals.setValidLoanFactory(address(loanFactory), true);  // Whitelist new LoanFactory
 
@@ -110,16 +122,16 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
         /***********************************************/
 
         // Deploy new LoanFactory, implementation, and initializer
-        debtLockerFactory        = new DebtLockerFactory(MAPLE_GLOBALS);
-        debtLockerImplementation = new DebtLocker();
-        debtLockerInitializer    = new DebtLockerInitializer();
+        debtLockerFactory          = new DebtLockerFactory(MAPLE_GLOBALS);
+        debtLockerImplementationV2 = new DebtLockerV2();
+        debtLockerInitializer      = new DebtLockerInitializer();
 
         // Register the new implementations and set default version
-        debtLockerFactory.registerImplementation(1, address(debtLockerImplementation), address(debtLockerInitializer));
-        debtLockerFactory.setDefaultVersion(1);
+        debtLockerFactory.registerImplementation(200, address(debtLockerImplementationV2), address(debtLockerInitializer));
+        debtLockerFactory.setDefaultVersion(200);
 
         globals.setValidSubFactory(POOL_FACTORY, address(debtLockerFactory), true);  // Whitelist new debtLockerFactory
-        assertTrue(globals.isValidSubFactory(POOL_FACTORY, address(debtLockerFactory), 1));
+        assertTrue(globals.isValidSubFactory(POOL_FACTORY, address(debtLockerFactory), 200));
 
         /*********************/
         /*** Deploy LoanV2 ***/
@@ -138,11 +150,11 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
 
         uint256[4] memory rates = [uint256(0.12e18), uint256(0), uint256(0), uint256(0.6e18)];
 
-        bytes memory arguments = loanInitializer.encodeArguments(address(borrower), assets, termDetails, requests, rates);
+        bytes memory arguments = loanInitializerV2.encodeArguments(address(borrower), assets, termDetails, requests, rates);
 
         bytes32 salt = keccak256(abi.encodePacked("salt"));
 
-        loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments, salt));
+        loan = borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments, salt);
     }
 
     function test_loanUpgrades() external {
@@ -151,25 +163,27 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
         /*** Upgrade Loan ***/
         /********************/
 
-        // Deploying and registering a new version
-        address loanImplementation2 = address(new MapleLoan());
-        loanFactory.registerImplementation(2, address(loanImplementation2), address(loanInitializer));
-        loanFactory.enableUpgradePath(1, 2, address(0));
+        // Deploying and registering a new version.
+        loanImplementationV3 = new MapleLoanV3();
+        loanInitializerV3    = new MapleLoanInitializerV3();
 
-        assertEq(loanV2.implementation(), address(loanImplementation));
-        assertEq(loanV2.factory(),        address(loanFactory));
+        loanFactory.registerImplementation(300, address(loanImplementationV3), address(loanInitializerV3));
+        loanFactory.enableUpgradePath(200, 300, address(0));
+
+        assertEq(IMapleLoanV2(loan).implementation(), address(loanImplementationV2));
+        assertEq(IMapleLoanV2(loan).factory(),        address(loanFactory));
 
         // Not borrower can't migrate
-        try notBorrower.loan_upgrade(address(loanV2),2, new bytes(0)) { assertTrue(false, "Non-borrower could upgrade"); } catch { }
+        try notBorrower.loan_upgrade(loan, 300, "") { assertTrue(false, "Non-borrower could upgrade"); } catch { }
 
         // Nothing changes
-        assertEq(loanV2.implementation(), address(loanImplementation));
-        assertEq(loanV2.factory(),        address(loanFactory));
+        assertEq(IMapleLoanV2(loan).implementation(), address(loanImplementationV2));
+        assertEq(IMapleLoanV2(loan).factory(),        address(loanFactory));
 
-        borrower.loan_upgrade(address(loanV2), 2, new bytes(0));
+        borrower.loan_upgrade(loan, 300, "");
 
-        assertEq(loanV2.implementation(), address(loanImplementation2));
-        assertEq(loanV2.factory(),        address(loanFactory));
+        assertEq(IMapleLoanV3(loan).implementation(), address(loanImplementationV3));
+        assertEq(IMapleLoanV3(loan).factory(),        address(loanFactory));
     }
 
     function test_debtLockerUpgrades() external {
@@ -178,7 +192,7 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
         /*** Fund Loan ***/
         /*****************/
 
-        uint256 fundAmount       = 1_000_000 * USD;
+        uint256 fundAmount = 1_000_000 * USD;
 
         assertEq(pool_principalOut       = pool.principalOut(),            PRINCIPAL_OUT);
         assertEq(pool_interestSum        = pool.interestSum(),             INTEREST_SUM);
@@ -187,9 +201,9 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(usdc_poolDelegateBal    = usdc.balanceOf(ORTHOGONAL_PD),  PD_USDC_BAL);
         assertEq(usdc_treasuryBal        = usdc.balanceOf(MAPLE_TREASURY), TREASURY_USDC_BAL);
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loan)), 0);
 
-        pool.fundLoan(address(loanV2), address(debtLockerFactory), fundAmount);
+        pool.fundLoan(loan, address(debtLockerFactory), fundAmount);
 
         assertEq(pool.principalOut(),             pool_principalOut       += fundAmount);
         assertEq(pool.interestSum(),              pool_interestSum        += 0);
@@ -198,37 +212,37 @@ contract UpgradeTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(usdc.balanceOf(ORTHOGONAL_PD),   usdc_poolDelegateBal    += 0);  // Investor estab fee
         assertEq(usdc.balanceOf(MAPLE_TREASURY),  usdc_treasuryBal        += 0);  // Treasury estab fee
 
-        assertEq(usdc.balanceOf(address(loanV2)), fundAmount);  // Remaining funds
+        assertEq(usdc.balanceOf(address(loan)), fundAmount);  // Remaining funds
 
         /***************************/
         /*** Upgrade Debt Locker ***/
         /***************************/
 
         // Deploying and registering a new version
-        address debtLockerV2 = address(new DebtLocker());
-        debtLockerFactory.registerImplementation(2, address(debtLockerV2), address(debtLockerInitializer));
-        debtLockerFactory.enableUpgradePath(1, 2, address(0));
+        debtLockerImplementationV3 = new DebtLockerV3();
+        debtLockerFactory.registerImplementation(300, address(debtLockerImplementationV3), address(debtLockerInitializer));
+        debtLockerFactory.enableUpgradePath(200, 300, address(0));
 
-        DebtLocker debtLocker = DebtLocker(loanV2.lender());
+        debtLocker = IMapleLoanV2(loan).lender();
 
-        assertEq(debtLocker.implementation(), address(debtLockerImplementation));
-        assertEq(debtLocker.factory(),        address(debtLockerFactory));
+        assertEq(IDebtLockerV2(debtLocker).implementation(), address(debtLockerImplementationV2));
+        assertEq(IDebtLockerV2(debtLocker).factory(),        address(debtLockerFactory));
 
         // Not Governor can't update
         GenericAccount account = new GenericAccount();
 
-        try account.call(address(debtLocker), abi.encodeWithSelector(DebtLocker.upgrade.selector, 2, new bytes(0))) {
+        try account.call(debtLocker, abi.encodeWithSelector(DebtLockerV2.upgrade.selector, 300, "")) {
             assertTrue(false, "Generic account could upgrade");
         } catch { }
 
-        assertEq(debtLocker.implementation(), address(debtLockerImplementation));
-        assertEq(debtLocker.factory(),        address(debtLockerFactory));
+        assertEq(IDebtLockerV2(debtLocker).implementation(), address(debtLockerImplementationV2));
+        assertEq(IDebtLockerV2(debtLocker).factory(),        address(debtLockerFactory));
 
         // address(this) is PoolDelegate
-        debtLocker.upgrade(2, new bytes(0));
+        IDebtLockerV2(debtLocker).upgrade(300, "");
 
-        assertEq(debtLocker.implementation(), address(debtLockerV2));
-        assertEq(debtLocker.factory(),        address(debtLockerFactory));
+        assertEq(IDebtLockerV3(debtLocker).implementation(), address(debtLockerImplementationV3));
+        assertEq(IDebtLockerV3(debtLocker).factory(),        address(debtLockerFactory));
     }
 
 }

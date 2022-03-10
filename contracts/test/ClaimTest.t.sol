@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.8.7;
 
-import { IERC20 } from "../../modules/erc20/src/interfaces/IERC20.sol";
+import { IERC20 } from "../../modules/erc20/contracts/interfaces/IERC20.sol";
 
-import { TestUtils, StateManipulations } from "../../modules/contract-test-utils/contracts/test.sol";
+import { TestUtils } from "../../modules/contract-test-utils/contracts/test.sol";
 
-import { DebtLocker }            from "../../modules/debt-locker/contracts/DebtLocker.sol";
-import { DebtLockerFactory }     from "../../modules/debt-locker/contracts/DebtLockerFactory.sol";
-import { DebtLockerInitializer } from "../../modules/debt-locker/contracts/DebtLockerInitializer.sol";
+import { DebtLocker }            from "../../modules/debt-locker-v3/contracts/DebtLocker.sol";
+import { DebtLockerFactory }     from "../../modules/debt-locker-v3/contracts/DebtLockerFactory.sol";
+import { DebtLockerInitializer } from "../../modules/debt-locker-v3/contracts/DebtLockerInitializer.sol";
 
 import { Liquidator }        from "../../modules/liquidations/contracts/Liquidator.sol";
 import { Rebalancer }        from "../../modules/liquidations/contracts/test/mocks/Mocks.sol";
 import { SushiswapStrategy } from "../../modules/liquidations/contracts/SushiswapStrategy.sol";
 import { UniswapV2Strategy } from "../../modules/liquidations/contracts/UniswapV2Strategy.sol";
 
-import { IMapleLoan } from "../../modules/loan/contracts/interfaces/IMapleLoan.sol";
+import { IMapleLoan } from "../../modules/loan-v3/contracts/interfaces/IMapleLoan.sol";
 
-import { MapleLoan }            from "../../modules/loan/contracts/MapleLoan.sol";
-import { MapleLoanFactory }     from "../../modules/loan/contracts/MapleLoanFactory.sol";
-import { MapleLoanInitializer } from "../../modules/loan/contracts/MapleLoanInitializer.sol";
+import { MapleLoan }            from "../../modules/loan-v3/contracts/MapleLoan.sol";
+import { MapleLoanFactory }     from "../../modules/loan-v3/contracts/MapleLoanFactory.sol";
+import { MapleLoanInitializer } from "../../modules/loan-v3/contracts/MapleLoanInitializer.sol";
 
 import { Borrower } from "./accounts/Borrower.sol";
 import { Keeper }   from "./accounts/Keeper.sol";
@@ -27,7 +27,7 @@ import { AddressRegistry } from "../AddressRegistry.sol";
 
 import { IMapleGlobalsLike, IPoolLike, IPoolLibLike, IStakeLockerLike } from "./interfaces/Interfaces.sol";
 
-contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
+contract ClaimTest is AddressRegistry, TestUtils {
 
     uint256 constant WAD = 10 ** 18;  // ETH  precision
     uint256 constant BTC = 10 ** 8;   // WBTC precision
@@ -56,7 +56,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
     DebtLockerFactory     debtLockerFactory;
     DebtLockerInitializer debtLockerInitializer;
 
-    IMapleLoan loanV2;
+    IMapleLoan loanV3;
 
     IMapleGlobalsLike globals = IMapleGlobalsLike(MAPLE_GLOBALS);
     IPoolLike         pool    = IPoolLike(ORTHOGONAL_POOL);        // Using deployed Orthogonal Pool
@@ -90,13 +90,13 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         bytes32 salt = keccak256(abi.encodePacked("salt"));
 
-        loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments, salt));
+        loanV3 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments, salt));
     }
 
     function _fundLoan() internal {
         uint256 fundAmount = 1_000_000 * USD;
 
-        pool.fundLoan(address(loanV2), address(debtLockerFactory), fundAmount);
+        pool.fundLoan(address(loanV3), address(debtLockerFactory), fundAmount);
 
         pool_principalOut       = pool.principalOut();
         pool_interestSum        = pool.interestSum();
@@ -111,8 +111,8 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         erc20_mint(WBTC, 0, address(borrower), 5 * BTC);
 
-        borrower.erc20_approve(WBTC, address(loanV2), 5 * BTC);
-        borrower.loan_drawdownFunds(address(loanV2), fundAmount, address(borrower));
+        borrower.erc20_approve(WBTC, address(loanV3), 5 * BTC);
+        borrower.loan_drawdownFunds(address(loanV3), fundAmount, address(borrower));
     }
 
     function _makeLoanPayments(uint256 payments, bool late)
@@ -125,10 +125,10 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         )
     {
         for (uint256 i = 0; i < payments; i++) {
-            hevm.warp(loanV2.nextPaymentDueDate() + (late ? 1 days + 1: 0));
+            vm.warp(loanV3.nextPaymentDueDate() + (late ? 1 days + 1: 0));
 
             // Check details for upcoming payment #1
-            ( uint256 principalPortion, uint256 interestPortion, uint256 delegateFee, uint256 treasuryFee ) = loanV2.getNextPaymentBreakdown();
+            ( uint256 principalPortion, uint256 interestPortion, uint256 delegateFee, uint256 treasuryFee ) = loanV3.getNextPaymentBreakdown();
             uint256 totalPayment = principalPortion + interestPortion + delegateFee + treasuryFee;
 
             totalPrincipal   += principalPortion;
@@ -138,27 +138,27 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
             // Make payment
             erc20_mint(USDC, 9, address(borrower), totalPayment);
-            borrower.erc20_approve(USDC, address(loanV2), totalPayment);
-            borrower.loan_makePayment(address(loanV2), totalPayment);
+            borrower.erc20_approve(USDC, address(loanV3), totalPayment);
+            borrower.loan_makePayment(address(loanV3), totalPayment);
         }
     }
 
     function _closeLoan() internal returns (uint256 principalPortion, uint256 interestPortion, uint256 delegateFee, uint256 treasuryFee) {
-        hevm.warp(block.timestamp + 5 days);
+        vm.warp(block.timestamp + 5 days);
 
-        ( principalPortion, interestPortion, delegateFee, treasuryFee ) = loanV2.getEarlyPaymentBreakdown();
+        ( principalPortion, interestPortion, delegateFee, treasuryFee ) = loanV3.getEarlyPaymentBreakdown();
 
         uint256 totalPayment = principalPortion + interestPortion + delegateFee + treasuryFee;
 
         // Close loan, paying a flat fee on principal
         erc20_mint(USDC, 9, address(borrower), totalPayment);
 
-        borrower.erc20_approve(USDC, address(loanV2), totalPayment);
-        borrower.loan_closeLoan(address(loanV2), totalPayment);
+        borrower.erc20_approve(USDC, address(loanV3), totalPayment);
+        borrower.loan_closeLoan(address(loanV3), totalPayment);
     }
 
     function _liquidateCollateral() internal {
-        DebtLocker debtLocker = DebtLocker(pool.debtLockers(address(loanV2), address(debtLockerFactory)));
+        DebtLocker debtLocker = DebtLocker(pool.debtLockers(address(loanV3), address(debtLockerFactory)));
 
         debtLocker.setAllowedSlippage(500);        // 5% slippage allowed
         debtLocker.setMinRatio(40_000 * 10 ** 6);  // Minimum 40k USDC per WBTC (Market price is ~43k at block 13276702)
@@ -203,7 +203,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         start = block.timestamp;
 
         // Set existing Orthogonal PD as Governor
-        hevm.store(MAPLE_GLOBALS, bytes32(uint256(1)), bytes32(uint256(uint160(address(this)))));
+        vm.store(MAPLE_GLOBALS, bytes32(uint256(1)), bytes32(uint256(uint160(address(this)))));
 
         borrower = new Borrower();
 
@@ -259,9 +259,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(delegateFee,      205_479452);
         assertEq(treasuryFee,      205_479452);
 
-        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], principalPortion + interestPortion);
         assertEq(details[1], interestPortion);
@@ -281,9 +281,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(delegateFee,      205_479452);
         assertEq(treasuryFee,      205_479452);
 
-        details = pool.claim(address(loanV2), address(debtLockerFactory));
+        details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], principalPortion + interestPortion);
         assertEq(details[1], interestPortion);
@@ -303,9 +303,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(delegateFee,      205_479452);
         assertEq(treasuryFee,      205_479452);
 
-        details = pool.claim(address(loanV2), address(debtLockerFactory));
+        details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], principalPortion + interestPortion);
         assertEq(details[1], interestPortion);
@@ -329,9 +329,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(principalPortion, 1_000_000_000000);
         assertEq(interestPortion,     29_589_041094);
 
-        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], principalPortion + interestPortion);
         assertEq(details[1], interestPortion);
@@ -355,9 +355,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(principalPortion, 1_000_000_000000);
         assertEq(interestPortion,    182_547_945201);
 
-        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], principalPortion + interestPortion);
         assertEq(details[1], interestPortion);
@@ -381,9 +381,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(principalPortion, 165_033_586704);
         assertEq(interestPortion,    9_863_013698);
 
-        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], principalPortion + interestPortion);
         assertEq(details[1], interestPortion);
@@ -401,9 +401,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(principalPortion, 166_661_315230);
         assertEq(interestPortion,    8_235_285172);
 
-        details = pool.claim(address(loanV2), address(debtLockerFactory));
+        details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], principalPortion + interestPortion);
         assertEq(details[1], interestPortion);
@@ -421,9 +421,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(principalPortion, 668_305_098066);
         assertEq(interestPortion,    6_591_502337);
 
-        details = pool.claim(address(loanV2), address(debtLockerFactory));
+        details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], principalPortion + interestPortion);
         assertEq(details[1], interestPortion);
@@ -447,9 +447,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(principalPortion, 1_000_000_000000);
         assertEq(interestPortion,     24_689_801207);
 
-        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], principalPortion + interestPortion);
         assertEq(details[1], interestPortion);
@@ -473,9 +473,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(principalPortion, 1_000_000_000000);
         assertEq(interestPortion,    152_322_356893);
 
-        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], principalPortion + interestPortion);
         assertEq(details[1], interestPortion);
@@ -499,9 +499,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(principalPortion, 330_067_173408);
         assertEq(interestPortion,    9_863_013698);
 
-        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], principalPortion + interestPortion);
         assertEq(details[1], interestPortion);
@@ -519,9 +519,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(principalPortion, 333_322_630461);
         assertEq(interestPortion,    6_607_556645);
 
-        details = pool.claim(address(loanV2), address(debtLockerFactory));
+        details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], principalPortion + interestPortion);
         assertEq(details[1], interestPortion);
@@ -539,9 +539,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(principalPortion, 336_610_196131);
         assertEq(interestPortion,    3_319_990975);
 
-        details = pool.claim(address(loanV2), address(debtLockerFactory));
+        details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], principalPortion + interestPortion);
         assertEq(details[1], interestPortion);
@@ -565,9 +565,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(principalPortion, 1_000_000_000000);
         assertEq(interestPortion,     19_790_561318);
 
-        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], principalPortion + interestPortion);
         assertEq(details[1], interestPortion);
@@ -591,9 +591,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(principalPortion, 1_000_000_000000);
         assertEq(interestPortion,    122_096_768583);
 
-        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], principalPortion + interestPortion);
         assertEq(details[1], interestPortion);
@@ -616,9 +616,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(principalPortion, 1_000_000_000000);
         assertEq(interestPortion,     10_000_000000);
 
-        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], principalPortion + interestPortion);
         assertEq(details[1], interestPortion);
@@ -631,7 +631,7 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         _assertPoolState(principalPortion, interestPortion, delegateFee, treasuryFee);
 
         // Fails to claim after loan is closed
-        try pool.claim(address(loanV2), address(debtLockerFactory)) { assertTrue(false, "Able to claim"); } catch { }
+        try pool.claim(address(loanV3), address(debtLockerFactory)) { assertTrue(false, "Able to claim"); } catch { }
     }
 
     function test_claim_defaultUncollateralized() external {
@@ -640,9 +640,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         _drawdownLoan();
 
         // Put in default
-        hevm.warp(block.timestamp + loanV2.nextPaymentDueDate() + loanV2.gracePeriod() + 1);
+        vm.warp(block.timestamp + loanV3.nextPaymentDueDate() + loanV3.gracePeriod() + 1);
 
-        pool.triggerDefault(address(loanV2), address(debtLockerFactory));
+        pool.triggerDefault(address(loanV3), address(debtLockerFactory));
 
         // Getting Variables before claim
         bpt_stakeLockerBal = bpt.balanceOf(ORTHOGONAL_SL);
@@ -650,9 +650,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         IStakeLockerLike stakeLocker = IStakeLockerLike(ORTHOGONAL_SL);
 
-        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], 0);
         assertEq(details[1], 0);
@@ -676,11 +676,11 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         _drawdownLoan();
 
         // Put in default
-        hevm.warp(block.timestamp + loanV2.nextPaymentDueDate() + loanV2.gracePeriod() + 1);
+        vm.warp(block.timestamp + loanV3.nextPaymentDueDate() + loanV3.gracePeriod() + 1);
 
-        pool.triggerDefault(address(loanV2), address(debtLockerFactory));
+        pool.triggerDefault(address(loanV3), address(debtLockerFactory));
 
-        try pool.claim(address(loanV2), address(debtLockerFactory)) {
+        try pool.claim(address(loanV3), address(debtLockerFactory)) {
             assertTrue(false, "Claim before liquidation is done");
         } catch Error(string memory reason) {
             assertEq(reason, "DL:HCOR:LIQ_NOT_FINISHED");
@@ -694,9 +694,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         _liquidateCollateral();
 
-        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], 280_135_620000);
         assertEq(details[1], 0);
@@ -726,17 +726,17 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(treasuryFee,      205_479452);
 
         // Put in default
-        hevm.warp(block.timestamp + loanV2.nextPaymentDueDate() + loanV2.gracePeriod() + 1);
+        vm.warp(block.timestamp + loanV3.nextPaymentDueDate() + loanV3.gracePeriod() + 1);
 
-        try pool.triggerDefault(address(loanV2), address(debtLockerFactory)) {
+        try pool.triggerDefault(address(loanV3), address(debtLockerFactory)) {
             assertTrue(false, "Trigger default before claim");
         } catch Error(string memory reason) {
             assertEq(reason, "DL:TD:NEED_TO_CLAIM");
         }
 
-        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], principalPortion + interestPortion);
         assertEq(details[1], interestPortion);
@@ -748,11 +748,11 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         _assertPoolState(principalPortion, interestPortion, delegateFee, treasuryFee);
 
-        pool.triggerDefault(address(loanV2), address(debtLockerFactory));
+        pool.triggerDefault(address(loanV3), address(debtLockerFactory));
 
-        details = pool.claim(address(loanV2), address(debtLockerFactory));
+        details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], 0);
         assertEq(details[1], 0);
@@ -778,17 +778,17 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         assertEq(treasuryFee,      205_479452);
 
         // Put in default
-        hevm.warp(block.timestamp + loanV2.nextPaymentDueDate() + loanV2.gracePeriod() + 1);
+        vm.warp(block.timestamp + loanV3.nextPaymentDueDate() + loanV3.gracePeriod() + 1);
 
-        try pool.triggerDefault(address(loanV2), address(debtLockerFactory)) {
+        try pool.triggerDefault(address(loanV3), address(debtLockerFactory)) {
             assertTrue(false, "Trigger default before claim");
         } catch Error(string memory reason) {
             assertEq(reason, "DL:TD:NEED_TO_CLAIM");
         }
 
-        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], principalPortion + interestPortion);
         assertEq(details[1], interestPortion);
@@ -800,9 +800,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         _assertPoolState(principalPortion, interestPortion, delegateFee, treasuryFee);
 
-        pool.triggerDefault(address(loanV2), address(debtLockerFactory));
+        pool.triggerDefault(address(loanV3), address(debtLockerFactory));
 
-        try pool.claim(address(loanV2), address(debtLockerFactory)) {
+        try pool.claim(address(loanV3), address(debtLockerFactory)) {
             assertTrue(false, "Claim before liquidation is done");
         } catch Error(string memory reason) {
             assertEq(reason, "DL:HCOR:LIQ_NOT_FINISHED");
@@ -810,9 +810,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         _liquidateCollateral();
 
-        details = pool.claim(address(loanV2), address(debtLockerFactory));
+        details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], 280_135_620000);
         assertEq(details[1], 0);
@@ -831,11 +831,11 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         _drawdownLoan();
 
          // Put in default
-        hevm.warp(block.timestamp + loanV2.nextPaymentDueDate() + loanV2.gracePeriod() + 1);
+        vm.warp(block.timestamp + loanV3.nextPaymentDueDate() + loanV3.gracePeriod() + 1);
 
-        pool.triggerDefault(address(loanV2), address(debtLockerFactory));
+        pool.triggerDefault(address(loanV3), address(debtLockerFactory));
 
-        try pool.claim(address(loanV2), address(debtLockerFactory)) {
+        try pool.claim(address(loanV3), address(debtLockerFactory)) {
             assertTrue(false, "Claim before liquidation is done");
         } catch Error(string memory reason) {
             assertEq(reason, "DL:HCOR:LIQ_NOT_FINISHED");
@@ -844,14 +844,14 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         _liquidateCollateral();
 
         // Malicious entity will send 1 WEI work of collateral to Liquidator
-        DebtLocker debtLocker =  DebtLocker(pool.debtLockers(address(loanV2), address(debtLockerFactory)));
+        DebtLocker debtLocker =  DebtLocker(pool.debtLockers(address(loanV3), address(debtLockerFactory)));
 
         address liquidator = debtLocker.liquidator();
 
         erc20_mint(WBTC, 0, liquidator, 1);
 
         // Claiming is locked again
-        try pool.claim(address(loanV2), address(debtLockerFactory)) {
+        try pool.claim(address(loanV3), address(debtLockerFactory)) {
             assertTrue(false, "Claim before liquidation is done");
         } catch Error(string memory reason) {
             assertEq(reason, "DL:HCOR:LIQ_NOT_FINISHED");
@@ -859,9 +859,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         debtLocker.pullFundsFromLiquidator(address(liquidator), WBTC, address(this), 1);
 
-        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], 280_135_620000);
         assertEq(details[1], 0);
@@ -880,11 +880,11 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         _drawdownLoan();
 
          // Put in default
-        hevm.warp(block.timestamp + loanV2.nextPaymentDueDate() + loanV2.gracePeriod() + 1);
+        vm.warp(block.timestamp + loanV3.nextPaymentDueDate() + loanV3.gracePeriod() + 1);
 
-        pool.triggerDefault(address(loanV2), address(debtLockerFactory));
+        pool.triggerDefault(address(loanV3), address(debtLockerFactory));
 
-        try pool.claim(address(loanV2), address(debtLockerFactory)) {
+        try pool.claim(address(loanV3), address(debtLockerFactory)) {
             assertTrue(false, "Claim before liquidation is done");
         } catch Error(string memory reason) {
             assertEq(reason, "DL:HCOR:LIQ_NOT_FINISHED");
@@ -893,14 +893,14 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         _liquidateCollateral();
 
         // Malicious entity will send 1 WEI work of collateral to Liquidator
-        DebtLocker debtLocker =  DebtLocker(pool.debtLockers(address(loanV2), address(debtLockerFactory)));
+        DebtLocker debtLocker =  DebtLocker(pool.debtLockers(address(loanV3), address(debtLockerFactory)));
 
         address liquidator = debtLocker.liquidator();
 
         erc20_mint(WBTC, 0, liquidator, 1);
 
         // Claiming is locked again
-        try pool.claim(address(loanV2), address(debtLockerFactory)) {
+        try pool.claim(address(loanV3), address(debtLockerFactory)) {
             assertTrue(false, "Claim before liquidation is done");
         } catch Error(string memory reason) {
             assertEq(reason, "DL:HCOR:LIQ_NOT_FINISHED");
@@ -908,9 +908,9 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         debtLocker.stopLiquidation();
 
-        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], 280_135_620000);
         assertEq(details[1], 0);
@@ -929,25 +929,25 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         _drawdownLoan();
 
          // Put in default
-        hevm.warp(block.timestamp + loanV2.nextPaymentDueDate() + loanV2.gracePeriod() + 1);
+        vm.warp(block.timestamp + loanV3.nextPaymentDueDate() + loanV3.gracePeriod() + 1);
 
-        pool.triggerDefault(address(loanV2), address(debtLockerFactory));
+        pool.triggerDefault(address(loanV3), address(debtLockerFactory));
 
-        try pool.claim(address(loanV2), address(debtLockerFactory)) {
+        try pool.claim(address(loanV3), address(debtLockerFactory)) {
             assertTrue(false, "Claim before liquidation is done");
         } catch Error(string memory reason) {
             assertEq(reason, "DL:HCOR:LIQ_NOT_FINISHED");
         }
 
         // Instead of liquidating, the Pool Delegate will prematurely stop the liquidation and take a loss
-        DebtLocker debtLocker =  DebtLocker(pool.debtLockers(address(loanV2), address(debtLockerFactory)));
+        DebtLocker debtLocker =  DebtLocker(pool.debtLockers(address(loanV3), address(debtLockerFactory)));
 
         debtLocker.stopLiquidation();
 
         // Now claiming is possible
-        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], 0);
         assertEq(details[1], 0);
@@ -966,11 +966,11 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         _drawdownLoan();
 
          // Put in default
-        hevm.warp(block.timestamp + loanV2.nextPaymentDueDate() + loanV2.gracePeriod() + 1);
+        vm.warp(block.timestamp + loanV3.nextPaymentDueDate() + loanV3.gracePeriod() + 1);
 
-        pool.triggerDefault(address(loanV2), address(debtLockerFactory));
+        pool.triggerDefault(address(loanV3), address(debtLockerFactory));
 
-        try pool.claim(address(loanV2), address(debtLockerFactory)) {
+        try pool.claim(address(loanV3), address(debtLockerFactory)) {
             assertTrue(false, "Claim before liquidation is done");
         } catch Error(string memory reason) {
             assertEq(reason, "DL:HCOR:LIQ_NOT_FINISHED");
@@ -978,16 +978,16 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
 
         _liquidateCollateral();
 
-        DebtLocker debtLocker =  DebtLocker(pool.debtLockers(address(loanV2), address(debtLockerFactory)));
+        DebtLocker debtLocker =  DebtLocker(pool.debtLockers(address(loanV3), address(debtLockerFactory)));
 
         // Even though the pool delegate called stopLiquidation, the liquidation already happened, so debtLocker will account correctly
         // It's NOT RECOMMENDED to use this method of a way to recover from a liquidation.
         debtLocker.stopLiquidation();
 
         // Claim will go through
-        uint256[7] memory details =  pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details =  pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], 280_135_620000);
         assertEq(details[1], 0);
@@ -1006,26 +1006,26 @@ contract ClaimTest is AddressRegistry, StateManipulations, TestUtils {
         _drawdownLoan();
 
          // Put in default
-        hevm.warp(block.timestamp + loanV2.nextPaymentDueDate() + loanV2.gracePeriod() + 1);
+        vm.warp(block.timestamp + loanV3.nextPaymentDueDate() + loanV3.gracePeriod() + 1);
 
-        pool.triggerDefault(address(loanV2), address(debtLockerFactory));
+        pool.triggerDefault(address(loanV3), address(debtLockerFactory));
 
-        try pool.claim(address(loanV2), address(debtLockerFactory)) {
+        try pool.claim(address(loanV3), address(debtLockerFactory)) {
             assertTrue(false, "Claim before liquidation is done");
         } catch Error(string memory reason) {
             assertEq(reason, "DL:HCOR:LIQ_NOT_FINISHED");
         }
 
-        DebtLocker debtLocker =  DebtLocker(pool.debtLockers(address(loanV2), address(debtLockerFactory)));
+        DebtLocker debtLocker =  DebtLocker(pool.debtLockers(address(loanV3), address(debtLockerFactory)));
         address liquidator = debtLocker.liquidator();
 
         // Pool Delegate mistankely stops liquidation before it's done.
         debtLocker.stopLiquidation();
 
         // Claim will go through
-        uint256[7] memory details =  pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details =  pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], 0);
         assertEq(details[1], 0);
