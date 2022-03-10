@@ -1,21 +1,28 @@
 [submodule "modules/contract-test-utils"]
 	path = modules/contract-test-utils
 	url = https://github.com/maple-labs/contract-test-utils.git
+	ignore = dirty
 [submodule "modules/erc20"]
 	path = modules/erc20
 	url = https://github.com/maple-labs/erc20.git
+	ignore = dirty
 [submodule "modules/liquidations"]
 	path = modules/liquidations
 	url = https://github.com/maple-labs/liquidations
+	ignore = dirty
 [submodule "modules/debt-locker-v2"]
 	path = modules/debt-locker-v2
 	url = git@github.com:maple-labs/debt-locker
+	ignore = dirty
 [submodule "modules/debt-locker-v3"]
 	path = modules/debt-locker-v3
 	url = git@github.com:maple-labs/debt-locker
+	ignore = dirty
 [submodule "modules/loan-v2"]
 	path = modules/loan-v2
 	url = git@github.com:maple-labs/loan
+	ignore = dirty
 [submodule "modules/loan-v3"]
 	path = modules/loan-v3
 	url = git@github.com:maple-labs/loan
+	ignore = dirty
