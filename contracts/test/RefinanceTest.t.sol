@@ -267,7 +267,7 @@ contract RefinanceTest is AddressRegistry, TestUtils {
         vm.warp(loanV3.nextPaymentDueDate());
 
         // Check details for upcoming payment #1
-        (  principalPortion, interestPortion, delegateFee, treasuryFee ) = loanV3.getNextPaymentBreakdown();
+        ( principalPortion, interestPortion, delegateFee, treasuryFee ) = loanV3.getNextPaymentBreakdown();
 
         // Principal is non-zero since the loan is now partially amortized
         assertEq(principalPortion, 329_257_314375);

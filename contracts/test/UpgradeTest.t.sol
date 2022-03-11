@@ -45,7 +45,7 @@ contract UpgradeTest is AddressRegistry, TestUtils {
     uint256 constant SL_USDC_BAL       =     179_170_813216;
     uint256 constant PD_USDC_BAL       =     122_108_154489;
     uint256 constant TREASURY_USDC_BAL =     769_625_000000;
-    uint256 constant ESTABLISHMENT_FEE =         1232876712;
+    uint256 constant ESTABLISHMENT_FEE =       1_232_876712;
 
     uint256 start;
 
