@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.8.7;
 
-import { Borrower as BorrowerV2 } from "../../../modules/loan/contracts/test/accounts/Borrower.sol";
+import { Borrower as BorrowerV3 } from "../../../modules/loan-v3/contracts/test/accounts/Borrower.sol";
 
 import { ILoanFactoryV1Like } from "../interfaces/Interfaces.sol";
 
-contract Borrower is BorrowerV2 {
+contract Borrower is BorrowerV3 {
 
     // Create V1 Loan
     function loanFactory_createLoan(

@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.8.7;
 
-import { IERC20 } from "../../modules/erc20/src/interfaces/IERC20.sol";
+import { IERC20 } from "../../modules/erc20/contracts/interfaces/IERC20.sol";
 
-import { TestUtils, StateManipulations } from "../../modules/contract-test-utils/contracts/test.sol";
+import { TestUtils } from "../../modules/contract-test-utils/contracts/test.sol";
 
-import { DebtLocker }            from "../../modules/debt-locker/contracts/DebtLocker.sol";
-import { DebtLockerFactory }     from "../../modules/debt-locker/contracts/DebtLockerFactory.sol";
-import { DebtLockerInitializer } from "../../modules/debt-locker/contracts/DebtLockerInitializer.sol";
+import { DebtLocker }            from "../../modules/debt-locker-v3/contracts/DebtLocker.sol";
+import { DebtLockerFactory }     from "../../modules/debt-locker-v3/contracts/DebtLockerFactory.sol";
+import { DebtLockerInitializer } from "../../modules/debt-locker-v3/contracts/DebtLockerInitializer.sol";
 
-import { IMapleLoan } from "../../modules/loan/contracts/interfaces/IMapleLoan.sol";
+import { IMapleLoan } from "../../modules/loan-v3/contracts/interfaces/IMapleLoan.sol";
 
-import { MapleLoan }            from "../../modules/loan/contracts/MapleLoan.sol";
-import { MapleLoanFactory }     from "../../modules/loan/contracts/MapleLoanFactory.sol";
-import { MapleLoanInitializer } from "../../modules/loan/contracts/MapleLoanInitializer.sol";
-import { Refinancer }           from "../../modules/loan/contracts/Refinancer.sol";
+import { MapleLoan }            from "../../modules/loan-v3/contracts/MapleLoan.sol";
+import { MapleLoanFactory }     from "../../modules/loan-v3/contracts/MapleLoanFactory.sol";
+import { MapleLoanInitializer } from "../../modules/loan-v3/contracts/MapleLoanInitializer.sol";
+import { Refinancer }           from "../../modules/loan-v3/contracts/Refinancer.sol";
 
 import { Borrower } from "./accounts/Borrower.sol";
 
@@ -22,7 +22,7 @@ import { AddressRegistry } from "../AddressRegistry.sol";
 
 import { IMapleGlobalsLike, IPoolLike } from "./interfaces/Interfaces.sol";
 
-contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
+contract RefinanceTest is AddressRegistry, TestUtils {
 
     uint256 constant WAD = 10 ** 18;  // ETH  precision
     uint256 constant BTC = 10 ** 8;   // WBTC precision
@@ -55,7 +55,7 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
     DebtLockerFactory     debtLockerFactory;
     DebtLockerInitializer debtLockerInitializer;
 
-    IMapleLoan loanV2;
+    IMapleLoan loanV3;
 
     IMapleGlobalsLike globals = IMapleGlobalsLike(MAPLE_GLOBALS);
     IPoolLike         pool    = IPoolLike(ORTHOGONAL_POOL);        // Using deployed Orthogonal Pool
@@ -79,7 +79,7 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
         start = block.timestamp;
 
         // Set existing Orthogonal PD as Governor
-        hevm.store(MAPLE_GLOBALS, bytes32(uint256(1)), bytes32(uint256(uint160(address(this)))));
+        vm.store(MAPLE_GLOBALS, bytes32(uint256(1)), bytes32(uint256(uint160(address(this)))));
 
         borrower = new Borrower();
 
@@ -127,7 +127,7 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
     function test_refinance_multipleActions() external {
 
         /*********************/
-        /*** Deploy LoanV2 ***/
+        /*** Deploy LoanV3 ***/
         /*********************/
 
         address[2] memory assets = [WBTC, USDC];
@@ -147,7 +147,7 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
 
         bytes32 salt = keccak256(abi.encodePacked("salt"));
 
-        loanV2 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments, salt));
+        loanV3 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments, salt));
 
         {
             /*****************/
@@ -156,9 +156,9 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
 
             uint256 fundAmount = 1_000_000 * USD;
 
-            assertEq(usdc.balanceOf(address(loanV2)), 0);
+            assertEq(usdc.balanceOf(address(loanV3)), 0);
 
-            pool.fundLoan(address(loanV2), address(debtLockerFactory), fundAmount);
+            pool.fundLoan(address(loanV3), address(debtLockerFactory), fundAmount);
 
             /*********************/
             /*** Drawdown Loan ***/
@@ -166,18 +166,18 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
 
             erc20_mint(WBTC, 0, address(borrower), 5 * BTC);
 
-            borrower.erc20_approve(WBTC, address(loanV2), 5 * BTC);
-            borrower.loan_drawdownFunds(address(loanV2), fundAmount, address(borrower));
+            borrower.erc20_approve(WBTC, address(loanV3), 5 * BTC);
+            borrower.loan_drawdownFunds(address(loanV3), fundAmount, address(borrower));
         }
 
         /********************************/
         /*** Make Payment 1 (On time) ***/
         /********************************/
 
-        hevm.warp(loanV2.nextPaymentDueDate());
+        vm.warp(loanV3.nextPaymentDueDate());
 
         // Check details for upcoming payment #1
-        ( uint256 principalPortion, uint256 interestPortion, uint256 delegateFee, uint256 treasuryFee ) = loanV2.getNextPaymentBreakdown();
+        ( uint256 principalPortion, uint256 interestPortion, uint256 delegateFee, uint256 treasuryFee ) = loanV3.getNextPaymentBreakdown();
 
         assertEq(principalPortion, 0);
         assertEq(interestPortion,  9863_013698);
@@ -189,14 +189,14 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
         // Make first payment
         erc20_mint(USDC, 9, address(borrower), totalPayment);
 
-        borrower.erc20_approve(USDC, address(loanV2), totalPayment);
-        borrower.loan_makePayment(address(loanV2), totalPayment);
+        borrower.erc20_approve(USDC, address(loanV3), totalPayment);
+        borrower.loan_makePayment(address(loanV3), totalPayment);
 
         /************************************/
         /*** Claim Funds as Pool Delegate ***/
         /************************************/
 
-        pool.claim(address(loanV2), address(debtLockerFactory));
+        pool.claim(address(loanV3), address(debtLockerFactory));
 
         /*****************/
         /*** Refinance ***/
@@ -231,43 +231,43 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
             data[7] = abi.encodeWithSelector(Refinancer.setLateFeeRate.selector,         refinanceRates[2]);
             data[8] = abi.encodeWithSelector(Refinancer.setLateInterestPremium.selector, refinanceRates[3]);
 
-            borrower.loan_proposeNewTerms(address(loanV2), address(refinancer), block.timestamp + 10 days, data);
+            borrower.loan_proposeNewTerms(address(loanV3), address(refinancer), block.timestamp + 10 days, data);
 
             // Pool Delegate(address this) accepts new terms on Debt Locker
-            DebtLocker debtLocker = DebtLocker(loanV2.lender());
+            DebtLocker debtLocker = DebtLocker(loanV3.lender());
 
             // Fails if there're no extra funds from pool
             try debtLocker.acceptNewTerms(address(refinancer), block.timestamp + 10 days, data, principalIncrease) { assertTrue(false, "shouldn't succeed"); } catch { }
 
             // Pool Delegate funds loan again for increasing amount
-            pool.fundLoan(address(loanV2), address(debtLockerFactory), principalIncrease);
+            pool.fundLoan(address(loanV3), address(debtLockerFactory), principalIncrease);
 
             debtLocker.acceptNewTerms(address(refinancer), block.timestamp + 10 days, data, principalIncrease);
         }
 
-        assertEq(loanV2.gracePeriod(),       refinanceTermDetails[0]);
-        assertEq(loanV2.paymentInterval(),   refinanceTermDetails[1]);
-        assertEq(loanV2.paymentsRemaining(), refinanceTermDetails[2]);
+        assertEq(loanV3.gracePeriod(),       refinanceTermDetails[0]);
+        assertEq(loanV3.paymentInterval(),   refinanceTermDetails[1]);
+        assertEq(loanV3.paymentsRemaining(), refinanceTermDetails[2]);
 
-        assertEq(loanV2.principalRequested(), requests[1] + principalIncrease);
-        assertEq(loanV2.principal(),          requests[1] + principalIncrease);
-        assertEq(loanV2.collateralRequired(), refinanceRequests[0]);
+        assertEq(loanV3.principalRequested(), requests[1] + principalIncrease);
+        assertEq(loanV3.principal(),          requests[1] + principalIncrease);
+        assertEq(loanV3.collateralRequired(), refinanceRequests[0]);
 
-        assertEq(loanV2.interestRate(),        refinanceRates[0]);
-        assertEq(loanV2.lateFeeRate(),         refinanceRates[2]);
-        assertEq(loanV2.lateInterestPremium(), refinanceRates[3]);
+        assertEq(loanV3.interestRate(),        refinanceRates[0]);
+        assertEq(loanV3.lateFeeRate(),         refinanceRates[2]);
+        assertEq(loanV3.lateInterestPremium(), refinanceRates[3]);
 
         /****************************/
         /*** Make Another payment ***/
         /****************************/
 
         // Drawdown extra amount
-        borrower.loan_drawdownFunds(address(loanV2), principalIncrease, address(borrower));
+        borrower.loan_drawdownFunds(address(loanV3), principalIncrease, address(borrower));
 
-        hevm.warp(loanV2.nextPaymentDueDate());
+        vm.warp(loanV3.nextPaymentDueDate());
 
         // Check details for upcoming payment #1
-        (  principalPortion, interestPortion, delegateFee, treasuryFee ) = loanV2.getNextPaymentBreakdown();
+        ( principalPortion, interestPortion, delegateFee, treasuryFee ) = loanV3.getNextPaymentBreakdown();
 
         // Principal is non-zero since the loan is now partially amortized
         assertEq(principalPortion, 329_257_314375);
@@ -280,22 +280,22 @@ contract RefinanceTest is AddressRegistry, StateManipulations, TestUtils {
         // Make first payment
         erc20_mint(USDC, 9, address(borrower), totalPayment);
 
-        borrower.erc20_approve(USDC, address(loanV2), totalPayment);
-        borrower.loan_makePayment(address(loanV2), totalPayment);
+        borrower.erc20_approve(USDC, address(loanV3), totalPayment);
+        borrower.loan_makePayment(address(loanV3), totalPayment);
 
-        assertEq(loanV2.drawableFunds(),      0);
-        assertEq(loanV2.claimableFunds(),     interestPortion + principalPortion);
-        assertEq(loanV2.nextPaymentDueDate(), block.timestamp + 45 days);
-        assertEq(loanV2.principal(),          2_000_000 * USD - principalPortion);
-        assertEq(loanV2.paymentsRemaining(),  2);
+        assertEq(loanV3.drawableFunds(),      0);
+        assertEq(loanV3.claimableFunds(),     interestPortion + principalPortion);
+        assertEq(loanV3.nextPaymentDueDate(), block.timestamp + 45 days);
+        assertEq(loanV3.principal(),          2_000_000 * USD - principalPortion);
+        assertEq(loanV3.paymentsRemaining(),  2);
 
         /************************************/
         /*** Claim Funds as Pool Delegate ***/
         /************************************/
 
-        uint256[7] memory details = pool.claim(address(loanV2), address(debtLockerFactory));
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
 
-        assertEq(usdc.balanceOf(address(loanV2)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
         assertEq(details[0], principalPortion + interestPortion);
         assertEq(details[1], interestPortion);
