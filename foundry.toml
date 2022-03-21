@@ -1,0 +1,20 @@
+[default]
+block_timestamp = 1635339498                           # Timestamp for tests (non-zero)
+block_number = 13499527                                # Block number for tests
+contracts = 'contracts'                                # The source directory
+libs = ['modules']                                     # A list of library directories
+offline = true                                         # Disable downloading of missing solc version(s)
+optimizer = true                                       # Enable or disable the solc optimizer
+optimizer_runs = 200                                   # The number of optimizer runs
+verbosity = 3                                          # The verbosity of tests
+sender = '0xA6cCb9483E3E7a737E3a4F5B72a1Ce51838ba122'  # The address of `msg.sender` in tests
+solc_version = '0.8.7'                                 # Override for the solc version (setting this ignores `auto_detect_solc`)
+
+[local]
+fuzz_runs = 100
+
+[deep]
+fuzz_runs = 5000
+
+[super_deep]
+fuzz_runs = 50000

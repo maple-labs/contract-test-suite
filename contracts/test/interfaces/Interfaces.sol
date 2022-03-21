@@ -76,6 +76,8 @@ interface IPoolLike {
 
     function liquidityLocker() external view returns (address liquidityLocker_);
 
+    function poolDelegate() external view returns (address poolDelegate_);
+
     function poolLosses() external view returns (uint256 poolLossess_);
 
     function principalOut() external view returns (uint256 principalOut_);
@@ -93,7 +95,7 @@ interface IStakeLockerFactoryLike {}
 interface IStakeLockerLike {
 
     function bptLosses() external view returns (uint256 bptLossess_);
-    
+
 }
 
 interface IUniswapV2Router02Like {}
