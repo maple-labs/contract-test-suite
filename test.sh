@@ -20,6 +20,6 @@ if [ -z "$test" ]; then match="[contracts/test/*.t.sol]"; else match=$test; fi
 echo Using profile: $FOUNDRY_PROFILE
 
 export DAPP_FORK_BLOCK=13499527  # TODO: Investigate why this isn't working in toml
-export FOUNDRY_SENDER=0xA6cCb9483E3E7a737E3a4F5B72a1Ce51838ba122
+export DAPP_TEST_ADDRESS=0xA6cCb9483E3E7a737E3a4F5B72a1Ce51838ba122
 
 forge test --match "$match" --rpc-url "$ETH_RPC_URL"
