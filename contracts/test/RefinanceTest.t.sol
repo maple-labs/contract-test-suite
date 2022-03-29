@@ -39,6 +39,7 @@ contract RefinanceTest is AddressRegistry, TestUtils {
     uint256 constant TREASURY_USDC_BAL =     769_625_000000;
 
     uint256 start;
+    uint256 deadline;
 
     // Mainnet State Variables
     uint256 bpt_stakeLockerBal;
@@ -122,9 +123,6 @@ contract RefinanceTest is AddressRegistry, TestUtils {
         assertTrue(globals.isValidSubFactory(POOL_FACTORY, address(debtLockerFactory), 1));
 
         refinancer = new Refinancer();
-    }
-
-    function test_refinance_multipleActions() external {
 
         /*********************/
         /*** Deploy LoanV3 ***/
@@ -149,32 +147,32 @@ contract RefinanceTest is AddressRegistry, TestUtils {
 
         loanV3 = IMapleLoan(borrower.mapleProxyFactory_createInstance(address(loanFactory), arguments, salt));
 
-        {
-            /*****************/
-            /*** Fund Loan ***/
-            /*****************/
+        /*****************/
+        /*** Fund Loan ***/
+        /*****************/
 
-            uint256 fundAmount = 1_000_000 * USD;
+        uint256 fundAmount = 1_000_000 * USD;
 
-            assertEq(usdc.balanceOf(address(loanV3)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)), 0);
 
-            pool.fundLoan(address(loanV3), address(debtLockerFactory), fundAmount);
+        pool.fundLoan(address(loanV3), address(debtLockerFactory), fundAmount);
 
-            /*********************/
-            /*** Drawdown Loan ***/
-            /*********************/
+        /*********************/
+        /*** Drawdown Loan ***/
+        /*********************/
 
-            erc20_mint(WBTC, 0, address(borrower), 5 * BTC);
+        erc20_mint(WBTC, 0, address(borrower), 5 * BTC);
 
-            borrower.erc20_approve(WBTC, address(loanV3), 5 * BTC);
-            borrower.loan_drawdownFunds(address(loanV3), fundAmount, address(borrower));
-        }
+        borrower.erc20_approve(WBTC, address(loanV3), 5 * BTC);
+        borrower.loan_drawdownFunds(address(loanV3), fundAmount, address(borrower));
 
         /********************************/
         /*** Make Payment 1 (On time) ***/
         /********************************/
 
         vm.warp(loanV3.nextPaymentDueDate());
+
+        deadline = block.timestamp + 10 days;
 
         // Check details for upcoming payment #1
         ( uint256 principalPortion, uint256 interestPortion, uint256 delegateFee, uint256 treasuryFee ) = loanV3.getNextPaymentBreakdown();
@@ -197,12 +195,13 @@ contract RefinanceTest is AddressRegistry, TestUtils {
         /************************************/
 
         pool.claim(address(loanV3), address(debtLockerFactory));
+    }
+
+    function test_refinance_multipleActions() external {
 
         /*****************/
         /*** Refinance ***/
         /*****************/
-
-        // Refinance parameters
 
         uint256[3] memory refinanceTermDetails = [
             uint256(15 days),  // 15 day grace period
@@ -210,10 +209,11 @@ contract RefinanceTest is AddressRegistry, TestUtils {
             uint256(3)
         ];
 
+        uint256[3] memory requests = [uint256(5 * BTC), uint256(1_000_000 * USD), uint256(1_000_000 * USD)];
+
         // 2 BTC @ ~$58k = $116k = 11.6% collateralized, partially amortized
         uint256[3] memory refinanceRequests = [uint256(2 * BTC), uint256(2_000_000 * USD), uint256(1_000_000 * USD)];
-
-        uint256[4] memory refinanceRates = [uint256(0.10e18), uint256(0), uint256(0.04e18), uint256(0.4e18)];
+        uint256[4] memory refinanceRates    = [uint256(0.10e18), uint256(0), uint256(0.04e18), uint256(0.4e18)];
 
         uint256 principalIncrease = refinanceRequests[1] - requests[1];
 
@@ -267,7 +267,7 @@ contract RefinanceTest is AddressRegistry, TestUtils {
         vm.warp(loanV3.nextPaymentDueDate());
 
         // Check details for upcoming payment #1
-        ( principalPortion, interestPortion, delegateFee, treasuryFee ) = loanV3.getNextPaymentBreakdown();
+        ( uint256 principalPortion, uint256 interestPortion, uint256 delegateFee, uint256 treasuryFee ) = loanV3.getNextPaymentBreakdown();
 
         // Principal is non-zero since the loan is now partially amortized
         assertEq(principalPortion, 329_257_314375);
@@ -275,7 +275,7 @@ contract RefinanceTest is AddressRegistry, TestUtils {
         assertEq(delegateFee,      616_438356);
         assertEq(treasuryFee,      616_438356);
 
-        totalPayment = principalPortion + interestPortion + delegateFee + treasuryFee;
+        uint256 totalPayment = principalPortion + interestPortion + delegateFee + treasuryFee;
 
         // Make first payment
         erc20_mint(USDC, 9, address(borrower), totalPayment);
@@ -300,6 +300,172 @@ contract RefinanceTest is AddressRegistry, TestUtils {
         assertEq(details[0], principalPortion + interestPortion);
         assertEq(details[1], interestPortion);
         assertEq(details[2], principalPortion);
+        assertEq(details[3], 0);
+        assertEq(details[4], 0);
+        assertEq(details[5], 0);
+        assertEq(details[6], 0);
+    }
+
+    function test_refinance_samePrincipal() external {
+        bytes[] memory calls = new bytes[](1);
+        calls[0] = abi.encodeWithSelector(Refinancer.setPaymentsRemaining.selector, 6);
+
+        borrower.loan_proposeNewTerms(address(loanV3), address(refinancer), deadline, calls);
+        DebtLocker(loanV3.lender()).acceptNewTerms(address(refinancer), deadline, calls, 0);
+
+        assertEq(loanV3.principal(),           1_000_000_000000);
+        assertEq(loanV3.endingPrincipal(),     1_000_000_000000);
+        assertEq(loanV3.interestRate(),        0.12e18);
+        assertEq(loanV3.paymentsRemaining(),   6);
+        assertEq(loanV3.paymentInterval(),     30 days);
+        assertEq(loanV3.delegateFee(),         205_479452);  // 1,000,000 * 0.5% * 30 / 365
+        assertEq(loanV3.treasuryFee(),         205_479452);
+        assertEq(loanV3.refinanceCommitment(), 0);
+        assertEq(loanV3.drawableFunds(),       0);
+        assertEq(loanV3.claimableFunds(),      0);
+
+        vm.warp(start + 60 days);
+
+        ( uint256 principalPortion, uint256 interestPortion, uint256 delegateFee, uint256 treasuryFee ) = loanV3.getNextPaymentBreakdown();
+
+        assertEq(principalPortion, 0);
+        assertEq(interestPortion,  9_863_013698); // 1,000,000 * 12% * 30 / 365
+        assertEq(delegateFee,      205_479452);
+        assertEq(treasuryFee,      205_479452);
+
+        uint256 totalPayment = principalPortion + interestPortion + delegateFee + treasuryFee;
+
+        erc20_mint(USDC, 9, address(borrower), totalPayment);
+
+        borrower.erc20_approve(USDC, address(loanV3), totalPayment);
+        borrower.loan_makePayment(address(loanV3), totalPayment);
+
+        assertEq(loanV3.drawableFunds(),      0);
+        assertEq(loanV3.claimableFunds(),     interestPortion);
+        assertEq(loanV3.nextPaymentDueDate(), start + 90 days);
+        assertEq(loanV3.principal(),          1_000_000_000000);
+        assertEq(loanV3.paymentsRemaining(),  5);
+        
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
+
+        assertEq(details[0], interestPortion);
+        assertEq(details[1], interestPortion);
+        assertEq(details[2], 0);
+        assertEq(details[3], 0);
+        assertEq(details[4], 0);
+        assertEq(details[5], 0);
+        assertEq(details[6], 0);
+    }
+
+    function test_refinance_increasedPrincipal() external {
+        bytes[] memory calls = new bytes[](2);
+        calls[0] = abi.encodeWithSelector(Refinancer.increasePrincipal.selector,  1_000_000_000000);
+        calls[1] = abi.encodeWithSelector(Refinancer.setEndingPrincipal.selector, 2_000_000_000000);
+
+        borrower.loan_proposeNewTerms(address(loanV3), address(refinancer), deadline, calls);
+        pool.fundLoan(address(loanV3), address(debtLockerFactory), 1_000_000_000000);
+        DebtLocker(loanV3.lender()).acceptNewTerms(address(refinancer), deadline, calls, 1_000_000_000000);
+
+        assertEq(loanV3.principal(),           2_000_000_000000);
+        assertEq(loanV3.endingPrincipal(),     2_000_000_000000);
+        assertEq(loanV3.interestRate(),        0.12e18);
+        assertEq(loanV3.paymentsRemaining(),   2);
+        assertEq(loanV3.paymentInterval(),     30 days);
+        assertEq(loanV3.delegateFee(),         410_958904);  // 2,000,000 * 0.5% * 30 / 365
+        assertEq(loanV3.treasuryFee(),         410_958904);
+        assertEq(loanV3.refinanceCommitment(), 0);
+        assertEq(loanV3.drawableFunds(),       1_000_000_000000);
+        assertEq(loanV3.claimableFunds(),      0);
+
+        borrower.loan_drawdownFunds(address(loanV3), 1_000_000_000000, address(borrower));
+
+        vm.warp(start + 60 days);
+
+        ( uint256 principalPortion, uint256 interestPortion, uint256 delegateFee, uint256 treasuryFee ) = loanV3.getNextPaymentBreakdown();
+
+        assertEq(principalPortion, 0);
+        assertEq(interestPortion,  19_726_027397); // 2,000,000 * 12% * 30 / 365
+        assertEq(delegateFee,      410_958904);
+        assertEq(treasuryFee,      410_958904);
+
+        uint256 totalPayment = principalPortion + interestPortion + delegateFee + treasuryFee;
+
+        erc20_mint(USDC, 9, address(borrower), totalPayment);
+
+        borrower.erc20_approve(USDC, address(loanV3), totalPayment);
+        borrower.loan_makePayment(address(loanV3), totalPayment);
+
+        assertEq(loanV3.drawableFunds(),      0);
+        assertEq(loanV3.claimableFunds(),     interestPortion);
+        assertEq(loanV3.nextPaymentDueDate(), start + 90 days);
+        assertEq(loanV3.principal(),          2_000_000_000000);
+        assertEq(loanV3.paymentsRemaining(),  1);
+        
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
+
+        assertEq(details[0], interestPortion);
+        assertEq(details[1], interestPortion);
+        assertEq(details[2], 0);
+        assertEq(details[3], 0);
+        assertEq(details[4], 0);
+        assertEq(details[5], 0);
+        assertEq(details[6], 0);
+    }
+
+    function test_refinance_decreasedPrincipal() external {
+        bytes[] memory calls = new bytes[](2);
+        calls[0] = abi.encodeWithSelector(Refinancer.setEndingPrincipal.selector, 750_000_000000);
+        calls[1] = abi.encodeWithSelector(Refinancer.decreasePrincipal.selector,  250_000_000000);
+
+        borrower.loan_proposeNewTerms(address(loanV3), address(refinancer), deadline, calls);
+
+        erc20_mint(USDC, 9, address(borrower), 250_000_000000);
+
+        borrower.erc20_approve(USDC, address(loanV3), 250_000_000000);
+        borrower.loan_returnFunds(address(loanV3), 250_000_000000);
+
+        DebtLocker(loanV3.lender()).acceptNewTerms(address(refinancer), deadline, calls, 0);
+
+        assertEq(loanV3.principal(),           750_000_000000);
+        assertEq(loanV3.endingPrincipal(),     750_000_000000);
+        assertEq(loanV3.interestRate(),        0.12e18);
+        assertEq(loanV3.paymentsRemaining(),   2);
+        assertEq(loanV3.paymentInterval(),     30 days);
+        assertEq(loanV3.delegateFee(),         154_109589);  // 750,000 * 0.5% * 30 / 365
+        assertEq(loanV3.treasuryFee(),         154_109589);
+        assertEq(loanV3.refinanceCommitment(), 0);
+        assertEq(loanV3.drawableFunds(),       0);
+        assertEq(loanV3.claimableFunds(),      250_000_000000);
+
+        pool.claim(address(loanV3), address(debtLockerFactory));
+
+        vm.warp(start + 60 days);
+
+        ( uint256 principalPortion, uint256 interestPortion, uint256 delegateFee, uint256 treasuryFee ) = loanV3.getNextPaymentBreakdown();
+
+        assertEq(principalPortion, 0);
+        assertEq(interestPortion,  7_397_260273); // 750,000 * 12% * 30 / 365
+        assertEq(delegateFee,      154_109589);
+        assertEq(treasuryFee,      154_109589);
+
+        uint256 totalPayment = principalPortion + interestPortion + delegateFee + treasuryFee;
+
+        erc20_mint(USDC, 9, address(borrower), totalPayment);
+
+        borrower.erc20_approve(USDC, address(loanV3), totalPayment);
+        borrower.loan_makePayment(address(loanV3), totalPayment);
+
+        assertEq(loanV3.drawableFunds(),      0);
+        assertEq(loanV3.claimableFunds(),     interestPortion);
+        assertEq(loanV3.nextPaymentDueDate(), start + 90 days);
+        assertEq(loanV3.principal(),          750_000_000000);
+        assertEq(loanV3.paymentsRemaining(),  1);
+        
+        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
+
+        assertEq(details[0], interestPortion);
+        assertEq(details[1], interestPortion);
+        assertEq(details[2], 0);
         assertEq(details[3], 0);
         assertEq(details[4], 0);
         assertEq(details[5], 0);
