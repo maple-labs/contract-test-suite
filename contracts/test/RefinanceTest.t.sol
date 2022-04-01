@@ -389,6 +389,7 @@ contract RefinanceTest is AddressRegistry, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV3)),        0);
         assertEq(usdc.balanceOf(pool.liquidityLocker()), usdc_liquidityLockerBal);
+        assertEq(usdc.balanceOf(loanV3.lender()),        0);
         assertEq(pool.principalOut(),                    pool_principalOut);
 
         pool.fundLoan(address(loanV3), address(debtLockerFactory), 1_000_000_000000);
@@ -397,6 +398,7 @@ contract RefinanceTest is AddressRegistry, TestUtils {
 
         assertEq(usdc.balanceOf(address(loanV3)),        0);
         assertEq(usdc.balanceOf(pool.liquidityLocker()), usdc_liquidityLockerBal);
+        assertEq(usdc.balanceOf(loanV3.lender()),        1_000_000_000000);
         assertEq(pool.principalOut(),                    pool_principalOut);
 
         DebtLocker(loanV3.lender()).acceptNewTerms(address(refinancer), deadline, calls, 1_000_000_000000);
