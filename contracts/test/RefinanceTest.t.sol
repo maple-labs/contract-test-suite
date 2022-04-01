@@ -360,16 +360,16 @@ contract RefinanceTest is AddressRegistry, TestUtils {
         assertEq(loanV3.principal(),          1_000_000_000000);
         assertEq(loanV3.paymentsRemaining(),  5);
 
-        assertEq(usdc.balanceOf(address(loanV3)), interestPortion);
+        assertEq(usdc.balanceOf(address(loanV3)),        interestPortion);
         assertEq(usdc.balanceOf(pool.liquidityLocker()), usdc_liquidityLockerBal);
-        assertEq(pool.principalOut(), pool_principalOut);
+        assertEq(pool.principalOut(),                    pool_principalOut);
 
         uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
         usdc_liquidityLockerBal += 0.8e18 * interestPortion / 1e18 + 2;
 
-        assertEq(usdc.balanceOf(address(loanV3)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)),        0);
         assertEq(usdc.balanceOf(pool.liquidityLocker()), usdc_liquidityLockerBal);
-        assertEq(pool.principalOut(), pool_principalOut);
+        assertEq(pool.principalOut(),                    pool_principalOut);
         
         assertEq(details[0], interestPortion);
         assertEq(details[1], interestPortion);
@@ -386,8 +386,19 @@ contract RefinanceTest is AddressRegistry, TestUtils {
         calls[1] = abi.encodeWithSelector(Refinancer.setEndingPrincipal.selector, 2_000_000_000000);
 
         borrower.loan_proposeNewTerms(address(loanV3), address(refinancer), deadline, calls);
+
+        assertEq(usdc.balanceOf(address(loanV3)),        0);
+        assertEq(usdc.balanceOf(pool.liquidityLocker()), usdc_liquidityLockerBal);
+        assertEq(pool.principalOut(),                    pool_principalOut);
+
         pool.fundLoan(address(loanV3), address(debtLockerFactory), 1_000_000_000000);
         usdc_liquidityLockerBal -= 1_000_000_000000;
+        pool_principalOut       += 1_000_000_000000;
+
+        assertEq(usdc.balanceOf(address(loanV3)),        0);
+        assertEq(usdc.balanceOf(pool.liquidityLocker()), usdc_liquidityLockerBal);
+        assertEq(pool.principalOut(),                    pool_principalOut);
+
         DebtLocker(loanV3.lender()).acceptNewTerms(address(refinancer), deadline, calls, 1_000_000_000000);
 
         assertEq(loanV3.principal(),           2_000_000_000000);
@@ -425,102 +436,16 @@ contract RefinanceTest is AddressRegistry, TestUtils {
         assertEq(loanV3.principal(),          2_000_000_000000);
         assertEq(loanV3.paymentsRemaining(),  1);
         
-        assertEq(usdc.balanceOf(address(loanV3)), interestPortion);
+        assertEq(usdc.balanceOf(address(loanV3)),        interestPortion);
         assertEq(usdc.balanceOf(pool.liquidityLocker()), usdc_liquidityLockerBal);
-        assertEq(pool.principalOut(), pool_principalOut + 1_000_000_000000);
+        assertEq(pool.principalOut(),                    pool_principalOut);
 
         uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
-        usdc_liquidityLockerBal += 0.8e18 * interestPortion / 1e18 + 2;
+        usdc_liquidityLockerBal += 0.8e18 * interestPortion / 1e18 + 2;  // 80% of the interest portion.
 
-        assertEq(usdc.balanceOf(address(loanV3)), 0);
+        assertEq(usdc.balanceOf(address(loanV3)),        0);
         assertEq(usdc.balanceOf(pool.liquidityLocker()), usdc_liquidityLockerBal);
-        assertEq(pool.principalOut(), pool_principalOut + 1_000_000_000000);
-
-        assertEq(details[0], interestPortion);
-        assertEq(details[1], interestPortion);
-        assertEq(details[2], 0);
-        assertEq(details[3], 0);
-        assertEq(details[4], 0);
-        assertEq(details[5], 0);
-        assertEq(details[6], 0);
-    }
-
-    function test_refinance_decreasedPrincipal() external {
-        bytes[] memory calls = new bytes[](2);
-        calls[0] = abi.encodeWithSelector(Refinancer.setEndingPrincipal.selector, 750_000_000000);
-        calls[1] = abi.encodeWithSelector(Refinancer.decreasePrincipal.selector,  250_000_000000);
-
-        borrower.loan_proposeNewTerms(address(loanV3), address(refinancer), deadline, calls);
-
-        erc20_mint(USDC, 9, address(borrower), 250_000_000000);
-
-        borrower.erc20_approve(USDC, address(loanV3), 250_000_000000);
-        borrower.loan_returnFunds(address(loanV3), 250_000_000000);
-
-        DebtLocker(loanV3.lender()).acceptNewTerms(address(refinancer), deadline, calls, 0);
-
-        assertEq(loanV3.principal(),           750_000_000000);
-        assertEq(loanV3.endingPrincipal(),     750_000_000000);
-        assertEq(loanV3.interestRate(),        0.12e18);
-        assertEq(loanV3.paymentsRemaining(),   2);
-        assertEq(loanV3.paymentInterval(),     30 days);
-        assertEq(loanV3.delegateFee(),         154_109589);  // 750,000 * 0.5% * 30 / 365
-        assertEq(loanV3.treasuryFee(),         154_109589);
-        assertEq(loanV3.refinanceCommitment(), 0);
-        assertEq(loanV3.drawableFunds(),       0);
-        assertEq(loanV3.claimableFunds(),      250_000_000000);
-
-        assertEq(usdc.balanceOf(address(loanV3)), 250_000_000000);
-        assertEq(usdc.balanceOf(pool.liquidityLocker()), usdc_liquidityLockerBal);
-        assertEq(pool.principalOut(), pool_principalOut);
-
-        uint256[7] memory details = pool.claim(address(loanV3), address(debtLockerFactory));
-        usdc_liquidityLockerBal += 200_000_000000;
-
-        assertEq(usdc.balanceOf(address(loanV3)), 0);
-        assertEq(usdc.balanceOf(pool.liquidityLocker()), usdc_liquidityLockerBal);
-        assertEq(pool.principalOut(), pool_principalOut);
-        
-        assertEq(details[0], 250_000_000000);
-        assertEq(details[1], 250_000_000000);
-        assertEq(details[2], 0);
-        assertEq(details[3], 0);
-        assertEq(details[4], 0);
-        assertEq(details[5], 0);
-        assertEq(details[6], 0);
-
-        vm.warp(start + 60 days);
-
-        ( uint256 principalPortion, uint256 interestPortion, uint256 delegateFee, uint256 treasuryFee ) = loanV3.getNextPaymentBreakdown();
-
-        assertEq(principalPortion, 0);
-        assertEq(interestPortion,  7_397_260273); // 750,000 * 12% * 30 / 365
-        assertEq(delegateFee,      154_109589);
-        assertEq(treasuryFee,      154_109589);
-
-        uint256 totalPayment = principalPortion + interestPortion + delegateFee + treasuryFee;
-
-        erc20_mint(USDC, 9, address(borrower), totalPayment);
-
-        borrower.erc20_approve(USDC, address(loanV3), totalPayment);
-        borrower.loan_makePayment(address(loanV3), totalPayment);
-
-        assertEq(loanV3.drawableFunds(),      0);
-        assertEq(loanV3.claimableFunds(),     interestPortion);
-        assertEq(loanV3.nextPaymentDueDate(), start + 90 days);
-        assertEq(loanV3.principal(),          750_000_000000);
-        assertEq(loanV3.paymentsRemaining(),  1);
-
-        assertEq(usdc.balanceOf(address(loanV3)), interestPortion);
-        assertEq(usdc.balanceOf(pool.liquidityLocker()), usdc_liquidityLockerBal);
-        assertEq(pool.principalOut(), pool_principalOut);
-
-        details = pool.claim(address(loanV3), address(debtLockerFactory));
-        usdc_liquidityLockerBal += 0.8e18 * interestPortion / 1e18 + 1;
-
-        assertEq(usdc.balanceOf(address(loanV3)), 0);
-        assertEq(usdc.balanceOf(pool.liquidityLocker()), usdc_liquidityLockerBal);
-        assertEq(pool.principalOut(), pool_principalOut);
+        assertEq(pool.principalOut(),                    pool_principalOut);
 
         assertEq(details[0], interestPortion);
         assertEq(details[1], interestPortion);
